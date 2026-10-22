@@ -103,7 +103,7 @@
 - 工具全部在主进程执行且只读；参数使用 `z.strictObject` 校验，JSON Schema 由 `z.toJSONSchema()` 生成后绑定给模型。
 - `agent-runner` 限制 5 轮 / 每轮 4 次 / 每次请求 12 次调用、单工具 15 秒、单工具 12k 字符、单请求 32k 字符；重复调用（工具名 + 参数）直接阻止；达到上限后强制一轮不带工具的收尾调用。
 - 敏感文件按路径拒绝（`.env*`（示例文件除外）、私钥、证书、凭据、`.ssh`/`.aws` 等目录），并对高置信密钥模式做内容阻断与搜索片段脱敏。
-- `search_code` 通过 `spawn('rg', args, { shell: false })` 调用系统 ripgrep，10 秒超时、2 MB 输出上限；返回结果按文件数、条数与片段长度裁剪。
+- `search_code` 通过 `spawn(resolveRgCommand(), args, { shell: false })` 调用 ripgrep：优先使用 `@vscode/ripgrep` 随包内置的 `rg`，支持 `DEV_PILOT_RG_PATH` 覆盖，内置缺失时回退系统 PATH；10 秒超时、2 MB 输出上限；支持 `case` 智能大小写；结果按文件分组、按文件数/条数与片段长度裁剪。
 - 工具输出以 `<tool_result>` 包裹并声明为不可信数据；系统提示要求“先定位再读取”，禁止编造路径/行号/内容。
 - 新增事件 `tool_started` / `tool_finished`，不改变 `completed` / `cancelled` / `error` 的单一终态语义；只持久化调用摘要，不保存工具输出正文。
 - 工作区右侧 AI 面板改为真实对话，与对话页共享同一 chat store，切换路由不会中断生成。
@@ -111,8 +111,8 @@
 验证结果：
 
 - `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm run build` 通过。
-- `npm test`：24 个测试文件、225 个用例通过（5 个真实 ripgrep 集成用例因本机 PATH 无 `rg` 跳过）；覆盖 Tool Registry、敏感文件、5 个工具、Agent 循环、适配器工具分片、ChatService 终态与落库、v1→v2 迁移。
-- 未覆盖：真实 DeepSeek 工具调用端到端验收依赖本地 `.env` 中的真实 Key 与额度；`search_code` 的真实搜索需要系统 PATH 中存在 `ripgrep`（阶段 7 评估随包分发），缺失时工具返回 `RG_NOT_AVAILABLE` 且不中断对话。
+- `npm test`：26 个测试文件、255 个用例通过（2 个“缺少 ripgrep”用例因内置 `rg` 可用而跳过）；覆盖 Tool Registry、敏感文件、5 个工具、真实 ripgrep 集成、Agent 循环、适配器工具分片、ChatService 终态与落库、v1→v2 迁移、Markdown 渲染。
+- 未覆盖：真实 DeepSeek 工具调用端到端验收依赖本地 `.env` 中的真实 Key 与额度；真实 ripgrep 集成用例使用内置 `rg`，全部不可用时工具返回 `RG_NOT_AVAILABLE` 且不中断对话。
 
 ## 阶段 6：Diff 修改闭环
 
@@ -128,7 +128,8 @@
 - [ ] 补齐单元与集成测试。
 - [ ] electron-builder Windows 安装包。
 - [ ] better-sqlite3 原生模块打包验证。
-- [ ] ripgrep 随包分发或安装检测方案验证。
+- [x] ripgrep 随包分发：`@vscode/ripgrep` 内置 `rg`，支持 `DEV_PILOT_RG_PATH` 覆盖。
+- [ ] 安装包内 `@vscode/ripgrep` 的 asarUnpack 配置与运行验证。
 - [ ] README、安装、配置与安全说明完善。
 - [ ] V1 最终验收清单逐项验证。
 

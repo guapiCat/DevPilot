@@ -16,6 +16,7 @@ import { repositoryService } from '@main/services/repository.service'
 import { toToolError } from './errors'
 import { capText, clampText, toPosixRelative } from './output'
 import { normalizeToolPath } from './path-args'
+import { resolveRgCommand } from './rg-path'
 import { isSensitivePath, redactSecretSnippet } from './sensitive'
 import { ToolExecutionError, type ToolDefinition } from './tool-registry'
 
@@ -24,6 +25,7 @@ interface RootProvider {
 }
 
 export type SearchMode = 'literal' | 'regex'
+export type SearchCase = 'smart' | 'sensitive' | 'insensitive'
 
 export interface SearchMatch {
   path: string
@@ -40,7 +42,9 @@ export interface ParsedSearchResult {
 const schema = z.strictObject({
   query: z.string().min(1).max(MAX_SEARCH_QUERY_LENGTH),
   path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH).optional(),
-  mode: z.enum(['literal', 'regex']).optional()
+  mode: z.enum(['literal', 'regex']).optional(),
+  // smart：查询全小写时忽略大小写，含大写时区分大小写（rg 默认行为更贴近 IDE 搜索）。
+  case: z.enum(['smart', 'sensitive', 'insensitive']).optional()
 })
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -52,7 +56,14 @@ function readTextField(value: unknown): string | undefined {
   return typeof value.text === 'string' ? value.text : undefined
 }
 
-export function buildSearchArgs(query: string, scope: string, mode: SearchMode): string[] {
+export function buildSearchArgs(
+  query: string,
+  scope: string,
+  mode: SearchMode,
+  caseMode: SearchCase = 'smart'
+): string[] {
+  const caseFlag = caseMode === 'insensitive' ? '-i' : caseMode === 'sensitive' ? '-s' : '-S'
+
   return [
     '--no-config',
     '--json',
@@ -63,6 +74,7 @@ export function buildSearchArgs(query: string, scope: string, mode: SearchMode):
     '1M',
     '--max-count',
     String(MAX_SEARCH_MATCHES_PER_FILE),
+    caseFlag,
     ...(mode === 'literal' ? ['-F'] : []),
     '-e',
     query,
@@ -140,7 +152,7 @@ function runSearch(
   signal: AbortSignal
 ): Promise<{ stdout: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
-    const child = spawn('rg', args, { cwd, shell: false, windowsHide: true })
+    const child = spawn(resolveRgCommand(), args, { cwd, shell: false, windowsHide: true })
     const stdoutChunks: Buffer[] = []
     let stdoutSize = 0
     let settled = false
@@ -223,13 +235,19 @@ export function createSearchCodeTool(
   return {
     name: 'search_code',
     description:
-      '使用 ripgrep 在当前仓库中搜索文本或正则表达式，返回文件名、行号和匹配片段。path 限定搜索目录（默认为整个仓库，使用 POSIX 相对路径，不要传绝对路径），mode 为 literal（默认）或 regex。结果有数量上限，可能被截断。',
+      '使用内置 ripgrep 在当前仓库中搜索文本或正则表达式，返回按文件分组的文件名、行号和匹配片段。path 限定搜索目录（默认为整个仓库，使用 POSIX 相对路径，不要传绝对路径），mode 为 literal（默认）或 regex，case 默认 smart（查询全小写时忽略大小写，含大写时区分大小写）。结果有数量上限，可能被截断。',
     schema,
     summarizeArgs: (args) => {
       const path = normalizeToolPath(args.path)
       const scope = path ? ` @ ${path}` : ''
       const mode = args.mode === 'regex' ? '（正则）' : ''
-      return `"${clampText(args.query, 60)}"${mode}${scope}`
+      const caseLabel =
+        args.case === 'insensitive'
+          ? '（忽略大小写）'
+          : args.case === 'sensitive'
+            ? '（区分大小写）'
+            : ''
+      return `"${clampText(args.query, 60)}"${mode}${caseLabel}${scope}`
     },
     async execute(args, context) {
       if (context.signal.aborted) {
@@ -252,10 +270,15 @@ export function createSearchCodeTool(
       const root = repositories.getRealRoot(context.repositoryId)
       const scope = requestedPath ?? '.'
       const mode = args.mode ?? 'literal'
+      const caseMode = args.case ?? 'smart'
 
       let result: { stdout: string; exitCode: number }
       try {
-        result = await runSearch(root, buildSearchArgs(args.query, scope, mode), context.signal)
+        result = await runSearch(
+          root,
+          buildSearchArgs(args.query, scope, mode, caseMode),
+          context.signal
+        )
       } catch (error) {
         throw toToolError(error)
       }
@@ -274,15 +297,31 @@ export function createSearchCodeTool(
 
       const parsed = parseRgJson(result.stdout)
       const modeLabel = mode === 'regex' ? '正则' : '字面量'
+      const caseLabel =
+        caseMode === 'insensitive'
+          ? '忽略大小写'
+          : caseMode === 'sensitive'
+            ? '区分大小写'
+            : '智能大小写'
       const header = [
-        `# 搜索: "${args.query}"（${modeLabel}）`,
+        `# 搜索: "${args.query}"（${modeLabel}，${caseLabel}）`,
         `匹配 ${parsed.matches.length} 条，涉及 ${parsed.fileCount} 个文件${
           parsed.truncated ? '（结果已截断）' : ''
         }`
       ].join('\n')
+      const grouped = new Map<string, SearchMatch[]>()
+      for (const match of parsed.matches) {
+        const list = grouped.get(match.path)
+        if (list) list.push(match)
+        else grouped.set(match.path, [match])
+      }
       const body =
         parsed.matches.length > 0
-          ? parsed.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
+          ? [...grouped.entries()]
+              .map(([path, matches]) =>
+                [`## ${path}`, ...matches.map((match) => `${match.line}: ${match.text}`)].join('\n')
+              )
+              .join('\n\n')
           : '未找到匹配内容。'
       const capped = capText(`${header}\n${body}`, MAX_TOOL_OUTPUT_CHARS)
 

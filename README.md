@@ -52,7 +52,7 @@
 | AI 接入    | LangChain.js（@langchain/deepseek）         |
 | 数据校验   | Zod 4                                       |
 | 测试/规范  | Vitest 5、ESLint 10、Prettier 3             |
-| 代码检索   | 系统 ripgrep CLI（`search_code`，只读）     |
+| 代码检索   | 内置 ripgrep（`search_code`，只读）         |
 
 ## 环境要求
 
@@ -61,7 +61,7 @@
 - npm（当前验证版本：6.14.5）
 - Git status/diff 依赖系统 `git` 命令（需在 PATH 中）；未安装时面板会提示 `GIT_NOT_AVAILABLE`。
 - SQLite 引擎随 `better-sqlite3` 打包，无需单独安装数据库；本机已验证该模块的 N-API 预编译二进制可在 Electron 44（Node 24 / ABI 149）与 Node 22 下直接加载。
-- `search_code` 依赖系统 PATH 中的 `ripgrep`（`rg`）。缺失时该工具返回 `RG_NOT_AVAILABLE`，其他工具与对话不受影响；随包分发方案留待阶段 7 验证。
+- `search_code` 使用随 `@vscode/ripgrep` 安装的内置 `rg`，无需系统安装 ripgrep；如需指定其他版本，可设置环境变量 `DEV_PILOT_RG_PATH` 指向 `rg` 可执行文件。内置版本缺失时才回退到系统 PATH 中的 `rg`；全部不可用时该工具返回 `RG_NOT_AVAILABLE`，其他工具与对话不受影响。
 
 本项目 `.npmrc` 使用 npmmirror 镜像，适配国内网络。若 Electron 二进制下载失败，可显式指定镜像后重试：
 
@@ -136,7 +136,7 @@ docs/            # 技术设计、开发计划、安全说明、架构决策、�
 
 ## 已知限制
 
-- `search_code` 需要系统 PATH 中存在 `ripgrep`；未安装时该工具不可用（返回 `RG_NOT_AVAILABLE`），应用尚未随包分发 `rg`（阶段 7）。
+- `search_code` 默认使用内置 ripgrep；安装包中的 asar 解包配置尚未验证（阶段 7），开发环境直接从 `node_modules/@vscode/ripgrep` 加载。
 - 工具仅只读；AI 提议修改文件、Diff 审核与应用流程尚未接入（阶段 6）。
 - SQLite 中的 `edit_sessions`、`file_edits` 表仍为阶段 6 预留。
 - 目前已支持手动编辑与保存；AI 提议修改的 Diff 审核尚未接入（阶段 6）。

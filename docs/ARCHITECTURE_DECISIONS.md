@@ -141,7 +141,7 @@
 
 - 工具以 `ToolRegistry` 统一注册；参数用 Zod 4 `z.strictObject` 校验，模型侧 JSON Schema 由 `z.toJSONSchema()` 生成并移除 `$schema`。未知工具与非法参数不执行，错误以稳定 `ToolErrorCode` 返回模型。
 - 只实现 5 个只读工具：`list_files`、`read_file`、`search_code`、`get_git_status`、`get_git_diff`。不提供写文件、任意命令、Git 写操作或网络请求工具。
-- `search_code` 调用系统 `rg`，使用参数数组、`shell: false`、`--no-config`、`--` 分隔查询与范围；10 秒超时、2 MB stdout 上限，退出码 1 视为无匹配。`rg` 缺失返回 `RG_NOT_AVAILABLE`，不阻断对话。
+- `search_code` 通过 `resolveRgCommand()` 解析 ripgrep：优先 `DEV_PILOT_RG_PATH` 覆盖，其次 `@vscode/ripgrep` 随包内置的 `rg`，最后回退系统 PATH；使用参数数组、`shell: false`、`--no-config`、`--` 分隔查询与范围；10 秒超时、2 MB stdout 上限，退出码 1 视为无匹配。全部不可用返回 `RG_NOT_AVAILABLE`，不阻断对话。
 - 不引入 LangChain Agent 框架，自写 `agent-runner.ts` 管理循环。模型调用仍走 `ModelAdapter`，`ChatService` 只负责事件、终态与持久化，便于单元测试注入 Mock。
 - 循环限制：最多 5 轮、每轮最多 4 次调用、每次请求最多 12 次；单工具 15 秒超时；单工具输出 12k 字符、单请求累计 32k 字符。达到轮数/调用上限后强制一轮不传工具的收尾调用，仍无回答则返回 `TOOL_EXECUTION_FAILED`。
 - 重复调用按 `工具名 + stableStringify(参数)` 判定，直接标记 `blocked`，不执行；工具被中止、超时或失败只生成该次调用的状态记录，不终止整个请求（取消请求除外）。
@@ -151,4 +151,4 @@
 - 消息表新增 `tool_calls` JSON 列（v2 迁移），只保存工具名、参数摘要、状态、结果摘要与耗时，不保存工具输出正文、文件内容、搜索片段或 Git Diff；Renderer 解析失败时降级为空，不影响历史加载。
 - 事件协议新增非终态 `tool_started` / `tool_finished`，仍走固定 `chat:event` channel；`completed` / `cancelled` / `error` 的单一终态语义不变。工具事件同时由对话页与工作区 AI 面板消费，二者共享同一 Pinia chat store。
 
-**影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。运行环境需要安装 ripgrep 才能使用 `search_code`（阶段 7 评估随包分发或安装检测）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。
+**影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。`search_code` 默认使用随包内置 ripgrep，不依赖系统安装；安装包需将 `@vscode/ripgrep` 的二进制目录加入 asarUnpack（阶段 7 验证）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。

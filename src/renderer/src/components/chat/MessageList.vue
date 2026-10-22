@@ -2,6 +2,7 @@
 import { ChatLineRound } from '@element-plus/icons-vue'
 import type { ChatMessage } from '@shared/types/chat'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
+import MarkdownContent from './MarkdownContent.vue'
 import ToolCallList from './ToolCallList.vue'
 
 withDefaults(
@@ -43,7 +44,11 @@ const emit = defineEmits<{
           v-if="message.role !== 'user' && message.toolCalls?.length"
           :calls="message.toolCalls"
         />
-        <p v-if="message.content">{{ message.content }}</p>
+        <MarkdownContent
+          v-if="message.content && message.role !== 'user'"
+          :content="message.content"
+        />
+        <p v-else-if="message.content" class="plain-text">{{ message.content }}</p>
         <p v-else-if="message.status === 'cancelled'" class="placeholder-text">已停止生成</p>
         <p v-else-if="message.toolCalls?.length" class="placeholder-text">正在调用工具…</p>
         <p v-else class="placeholder-text">正在等待回复…</p>
@@ -121,6 +126,9 @@ const emit = defineEmits<{
   margin: 0;
   color: var(--dp-text);
   line-height: 1.75;
+}
+
+.plain-text {
   white-space: pre-wrap;
 }
 

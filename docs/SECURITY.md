@@ -60,7 +60,7 @@ Main（Electron）
 - 工具集合固定为 `list_files`、`read_file`、`search_code`、`get_git_status`、`get_git_diff`；没有写文件、任意命令、Git 写操作或网络工具。
 - `list_files` 跳过符号链接、`.git`/`node_modules`/构建缓存与敏感条目，限制深度 3、最多 500 项。
 - `read_file` 复用安全文件读取（1 MB、二进制/编码校验、路径范围），额外按行区间读取（最多 300 行）并阻止敏感路径与高置信密钥内容。
-- `search_code` 使用 `spawn('rg', args, { shell: false })` 参数数组执行，禁止用户配置、限制 10 秒与 2 MB 输出，最多 40 个文件 / 200 条匹配；查询以 `-e` 传入并用 `--` 分隔，避免被解析为选项。
+- `search_code` 使用 `spawn(resolveRgCommand(), args, { shell: false })` 参数数组执行，优先内置 ripgrep（`@vscode/ripgrep`，`DEV_PILOT_RG_PATH` 可覆盖），禁止用户配置、限制 10 秒与 2 MB 输出，最多 40 个文件 / 200 条匹配；查询以 `-e` 传入并用 `--` 分隔，避免被解析为选项。
 - 敏感路径按已知清单阻断（`.env*` 示例文件除外、SSH 私钥、证书、凭据、`.ssh`/`.aws`/`.gnupg` 等目录等）；搜索与 Diff 片段命中高置信密钥模式时脱敏或整份阻断。该过滤基于已知模式，不能保证识别所有秘密。
 - 工具输出统一包裹为 `<tool_result>`，系统提示将其与 README、注释、Issue、搜索片段一起声明为不可信数据；其中要求忽略规则或泄露提示词的指令不执行。
 - Agent 循环限制轮数与调用次数，重复调用（工具名 + 规范化参数）直接阻止；单工具 15 秒超时、12k 字符上限，单请求累计 32k 字符；达到上限后强制收尾，避免上下文膨胀与无限循环。
@@ -150,7 +150,8 @@ V1 按项目决定使用本地 `.env`：
 - [x] 渲染层验证未配置 Key 时禁用输入、事件错误可重试、停止后不残留生成状态（Playwright + API mock）。
 - [x] 工具循环覆盖正常调用、无工具单轮、轮数/单轮/总量上限、重复调用、工具错误/超时、取消、输出截断与事件顺序（单元测试覆盖）。
 - [x] 敏感文件清单、高置信密钥识别、片段脱敏、`read_file`/`get_git_diff` 阻断与 `search_code` 参数构造/JSON 解析（单元测试覆盖）。
-- [ ] `search_code` 真实 ripgrep 集成与真实 DeepSeek 工具调用端到端验收（依赖本机 `rg`、Key 与额度，阶段 7 补充）。
+- [x] `search_code` 真实 ripgrep 集成（使用内置 `rg`；无可用 `rg` 时用例自动跳过并覆盖 `RG_NOT_AVAILABLE`）。
+- [ ] 真实 DeepSeek 工具调用端到端验收（依赖本地 Key 与额度，阶段 7 补充）。
 - [ ] 真实 DeepSeek API 的端到端验收（依赖本地 Key 与额度，阶段 7 补充）。
 - [ ] 外部修改后旧提案拦截（阶段 6）。
 - [ ] 未确认提案不改磁盘（阶段 6）。

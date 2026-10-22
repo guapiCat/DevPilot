@@ -1,0 +1,132 @@
+.markdown-body {
+  color: var(--dp-text);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body table,
+.markdown-body pre,
+.markdown-body blockquote {
+  margin: 0 0 10px;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 18px 0 8px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.markdown-body h1 {
+  font-size: 20px;
+}
+
+.markdown-body h2 {
+  font-size: 18px;
+}
+
+.markdown-body h3 {
+  font-size: 16px;
+}
+
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 14px;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 22px;
+}
+
+.markdown-body li + li {
+  margin-top: 3px;
+}
+
+.markdown-body a {
+  color: var(--dp-accent);
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid var(--dp-border);
+}
+
+.markdown-body blockquote {
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--dp-border-strong);
+  color: var(--dp-text-secondary);
+}
+
+.markdown-body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--dp-bg-hover);
+  font-family: var(--dp-mono);
+  font-size: 12.5px;
+}
+
+.markdown-body pre.md-code {
+  padding: 12px 14px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-app);
+  overflow: auto;
+}
+
+.markdown-body pre.md-code code {
+  display: block;
+  padding: 0;
+  background: none;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.markdown-body table {
+  display: block;
+  max-width: 100%;
+  border-collapse: collapse;
+  overflow: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 10px;
+  border: 1px solid var(--dp-border);
+  text-align: left;
+}
+
+.markdown-body thead th {
+  background: var(--dp-bg-elevated);
+  font-weight: 600;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}

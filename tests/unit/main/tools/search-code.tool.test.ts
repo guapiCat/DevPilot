@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,10 +9,11 @@ import {
   MAX_SEARCH_MATCHES,
   MAX_SEARCH_MATCHES_PER_FILE
 } from '@shared/constants/app'
+import { resolveRgCommand } from '@main/ai/tools/rg-path'
 import { buildSearchArgs, createSearchCodeTool, parseRgJson } from '@main/ai/tools/search-code.tool'
 import type { ToolContext } from '@main/ai/tools/tool-registry'
 
-const rgAvailable = spawnSync('rg', ['--version'], { windowsHide: true }).status === 0
+const rgAvailable = spawnSync(resolveRgCommand(), ['--version'], { windowsHide: true }).status === 0
 
 function matchEvent(path: string, lineNumber: number, text: string): string {
   return JSON.stringify({
@@ -50,6 +52,25 @@ describe('buildSearchArgs', () => {
     expect(args).toContain('--max-count')
     expect(args).toContain('!**/node_modules/**')
     expect(args).toContain('!**/.git/**')
+  })
+
+  it('默认智能大小写，可切换为忽略或区分大小写', () => {
+    expect(buildSearchArgs('x', '.', 'literal')).toContain('-S')
+    expect(buildSearchArgs('x', '.', 'literal', 'insensitive')).toContain('-i')
+    expect(buildSearchArgs('x', '.', 'literal', 'sensitive')).toContain('-s')
+  })
+})
+
+describe('resolveRgCommand', () => {
+  it('解析到随包 ripgrep 或系统 rg', () => {
+    const command = resolveRgCommand()
+    expect(command === 'rg' || existsSync(command)).toBe(true)
+  })
+
+  it('覆盖路径无效时回退', () => {
+    expect(resolveRgCommand('C:/definitely-not-here/rg.exe')).not.toBe(
+      'C:/definitely-not-here/rg.exe'
+    )
   })
 })
 
@@ -143,21 +164,29 @@ describe.skipIf(!rgAvailable)('search_code 工具（真实 ripgrep）', () => {
   it('返回文件、行号与匹配片段，敏感文件不出现', async () => {
     const result = await tool.execute({ query: 'TODO' }, context)
 
-    expect(result.content).toContain('app.ts:1:')
-    expect(result.content).toContain('TODO: refactor')
+    expect(result.content).toContain('## app.ts')
+    expect(result.content).toContain('1: const value = 1 // TODO: refactor')
     expect(result.content).not.toContain('.env')
     expect(result.summary).toBe('1 条匹配 / 1 个文件')
   })
 
   it('支持正则模式与目录范围', async () => {
     const result = await tool.execute({ query: 'TO[D]O', mode: 'regex', path: 'app.ts' }, context)
-    expect(result.content).toContain('app.ts:1:')
+    expect(result.content).toContain('## app.ts')
+  })
+
+  it('默认智能大小写：全小写查询匹配大写内容，显式区分大小写则不匹配', async () => {
+    const smart = await tool.execute({ query: 'todo' }, context)
+    expect(smart.content).toContain('## app.ts')
+
+    const sensitive = await tool.execute({ query: 'todo', case: 'sensitive' }, context)
+    expect(sensitive.summary).toBe('未找到匹配')
   })
 
   it('接受 . / ./ 与尾随斜杠写法', async () => {
     for (const path of ['.', './', './app.ts/', 'app.ts/']) {
       const result = await tool.execute({ query: 'TODO', path }, context)
-      expect(result.content).toContain('app.ts:1:')
+      expect(result.content).toContain('## app.ts')
     }
   })
 
