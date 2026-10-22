@@ -1,3 +1,4 @@
+import type { FileEditOperation } from './edit'
 import type { ErrorCode } from './ipc'
 import type { ToolCallRecord, ToolCallStatus } from './tool'
 
@@ -42,6 +43,15 @@ export type ChatEvent =
       status: ToolCallStatus
       summary: string
       durationMs: number
+    }
+  | {
+      type: 'edit_proposed'
+      requestId: string
+      conversationId: string
+      editSessionId: string
+      fileEditId: string
+      relativePath: string
+      operation: FileEditOperation
     }
   | { type: 'completed'; requestId: string; conversationId: string; assistantMessage: ChatMessage }
   | { type: 'cancelled'; requestId: string; conversationId: string }

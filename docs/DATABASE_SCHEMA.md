@@ -1,6 +1,6 @@
 # DevPilot 数据库表结构
 
-> 适用范围：V1（阶段 1–5 已实现部分与后续阶段预留表）
+> 适用范围：V1（阶段 1–6 已实现部分）
 > 事实来源：`src/main/database/database.ts` 的迁移定义
 > 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013）、[SECURITY.md](SECURITY.md)
 
@@ -14,7 +14,7 @@
   - `busy_timeout = 5000`：遇到锁时最多等待 5 秒。
 - 应用启动时打开并迁移；退出时（`will-quit`）关闭连接。
 - 初始化失败不会阻断启动，只是本次运行不持久化仓库与对话信息（内存模式）。
-- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；`edit_sessions`、`file_edits` 仍为阶段 6 预留。
+- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；阶段 6 起写入 `edit_sessions` 与 `file_edits`，保存 AI 修改提案。
 
 ## 2. 迁移机制
 
@@ -25,6 +25,8 @@ user_version = 0 ──MIGRATIONS[0]──▶ 1 ──MIGRATIONS[1]──▶ 2
 ```
 
 v2 内容：`ALTER TABLE messages ADD COLUMN tool_calls TEXT;`，用于保存工具调用摘要，不改动既有数据。
+
+阶段 6 复用 v1 已创建的 `edit_sessions` / `file_edits` 表，**不需要新增迁移**，`user_version` 仍为 2。
 
 规则：
 
@@ -159,6 +161,8 @@ repositories
 - `idx_edit_sessions_conversation (conversation_id, updated_at DESC)`
 - `idx_edit_sessions_repository (repository_id, updated_at DESC)`
 
+写入路径：`EditService.propose()` 以 `conversationId + runId` 为键，把同一次模型请求的多个文件提案归入同一个 `active` 会话；每次提交新提案刷新 `updated_at`。应用或拒绝文件后重新统计会话内状态：仍存在 `proposed`/`stale` 文件时保持 `active`，全部处理完改为 `completed`。Renderer 只读取 `active` 且含待审核/过期文件的会话。
+
 ### 4.5 file_edits — 逐文件编辑提案（阶段 6 使用）
 
 | 列                 | 类型 | 约束                                                  | 说明                                      |
@@ -178,6 +182,14 @@ repositories
 
 `original_hash` 是阶段 6 的核心防护字段：应用提案前重新计算磁盘文件哈希，与记录不一致时标记 `stale`，禁止覆盖外部修改。
 
+状态与写入规则：
+
+- `operation`：`modify`（精确替换）或 `create`（新建文件）；本阶段不提供删除操作。
+- `status`：`proposed` → `applied` / `rejected`；复核失败为 `stale`，写入异常为 `failed`。`stale` 文件仍会出现在审核面板中，但禁止直接应用。
+- `modify` 保存读取时的完整内容与 SHA-256；`create` 的 `original_content` 为 `NULL`，`original_hash` 固定写空字符串 `''`，表示“目标必须不存在”（沿用 v1 表的 `NOT NULL` 约束，不新增迁移）。
+- 单会话最多 20 个文件；同一路径（不区分大小写）在会话内只允许存在一条 `proposed`/`stale`/`applied` 记录，`rejected` 后可重新提案。
+- 提案内容是本地审核数据：只保存被提议的单个文件，不保存整仓内容；不会因为写入提案而上传数据。
+
 ## 5. 索引汇总
 
 | 索引名                           | 表            | 列                                 | 用途               |
@@ -196,8 +208,10 @@ repositories
 | `src/main/database/database.ts`            | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                |
 | `src/main/database/repository.store.ts`    | 仓库表 SQL：`list` / `findByPath` / `insert` / `touch`                           |
 | `src/main/database/chat.store.ts`          | 会话/消息表 SQL：列表、插入、标题生成、工具摘要 JSON、最近消息读取（全部参数化） |
+| `src/main/database/edit.store.ts`          | 编辑提案表 SQL：会话/文件提案插入、按状态查询、状态更新、路径去重与计数          |
 | `src/main/services/repository.service.ts`  | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR` |
 | `src/main/services/chat.service.ts`        | 业务层：会话创建、发送/重试/取消、Agent 循环、流式与工具事件、错误映射、连接测试 |
+| `src/main/services/edit.service.ts`        | 业务层：提案校验与持久化、应用/拒绝、哈希复核、`stale`/`failed` 标记与会话收尾   |
 | `src/main/index.ts`                        | 生命周期：启动打开并迁移，初始化两个 Store，`will-quit` 取消请求后关闭连接       |
 | `src/main/ipc/*`                           | 通过 service 间接访问，不直接接触连接                                            |
 | `src/renderer/src/services/desktop-api.ts` | 经 IPC 调用 `repository.list()` / `chat.send()` 等，无数据库能力                 |
@@ -209,7 +223,7 @@ repositories
 - 数据库列名用 `snake_case`，TypeScript 记录对象用 `camelCase`，由 Store 的 `toRecord` 映射。
 - 时间统一存 ISO 8601 UTC 字符串，排序直接使用字符串比较。
 - ID 统一为 UUID 字符串，由主进程生成。
-- 不保存 API Key、普通文件内容、工具输出正文或 Git 命令输出；当前保存仓库元数据、会话、消息与工具调用摘要。
+- 不保存 API Key、工具输出正文或 Git 命令输出；当前保存仓库元数据、会话、消息、工具调用摘要，以及 AI 修改提案中被提议文件的原始/建议内容（用于 Diff 审核与重启恢复）。
 
 ## 7. 常用查询
 
@@ -251,7 +265,7 @@ LIMIT ?;
 | `repositories`  | 已使用   | 阶段 3   |
 | `conversations` | 已使用   | 阶段 4   |
 | `messages`      | 已使用   | 阶段 4–5 |
-| `edit_sessions` | 未写入   | 阶段 6   |
-| `file_edits`    | 未写入   | 阶段 6   |
+| `edit_sessions` | 已使用   | 阶段 6   |
+| `file_edits`    | 已使用   | 阶段 6   |
 
-验收覆盖：迁移幂等、5 张表与 6 个索引、v1→v2 升级保留旧数据、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新、`tool_calls` JSON 往返与损坏容错、跨重启恢复见 `tests/unit/main/chat.store.test.ts`。
+验收覆盖：迁移幂等、5 张表与 6 个索引、v1→v2 升级保留旧数据、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新、`tool_calls` JSON 往返与损坏容错、跨重启恢复见 `tests/unit/main/chat.store.test.ts`；提案会话分组、文件上限、重复路径、`original_hash=''`、应用/拒绝状态流转、外部修改标记 `stale` 与会话收尾见 `tests/unit/main/edit.service.test.ts`。

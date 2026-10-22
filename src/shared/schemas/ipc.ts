@@ -100,3 +100,19 @@ export const chatCancelInputSchema = z.object({
 })
 
 export type ChatCancelInput = z.infer<typeof chatCancelInputSchema>
+
+export const editListPendingInputSchema = z.object({
+  conversationId: conversationIdSchema
+})
+
+export type EditListPendingInput = z.infer<typeof editListPendingInputSchema>
+
+const editSessionIdSchema = z.string().uuid('编辑会话 ID 不合法')
+const fileEditIdSchema = z.string().uuid('文件编辑 ID 不合法')
+
+export const editFileInputSchema = z.object({
+  editSessionId: editSessionIdSchema,
+  fileEditId: fileEditIdSchema
+})
+
+export type EditFileInput = z.infer<typeof editFileInputSchema>

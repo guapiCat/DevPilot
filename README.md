@@ -2,8 +2,8 @@
 
 面向研发工作的 Windows 桌面智能助手。DevPilot 的目标是让开发者在本地代码仓库中通过 AI 理解代码、定位问题、提出修改，并在 Diff 审核确认后把修改应用到工作区。
 
-> 当前状态：**阶段 1–5 已完成：仓库浏览与编辑、Git 只读集成、SQLite 持久化、DeepSeek 流式对话、只读代码理解工具**。
-> Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
+> 当前状态：**阶段 1–6 已完成：仓库浏览与编辑、Git 只读集成、SQLite 持久化、DeepSeek 流式对话、只读代码理解工具、AI 修改提案与 Diff 审核**。
+> Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
 > 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准，数据库表结构见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
 
 ## 已实现
@@ -11,7 +11,7 @@
 - Electron + Vue 3 + TypeScript 分层工程（Main / Preload / Renderer / Shared）。
 - 安全窗口配置：`contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`。
 - 最小化 Preload API：`window.devPilot.app.*`、`window.devPilot.settings.*`、`window.devPilot.chat.*` 等具名能力，不暴露任意 IPC channel。
-- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询与连接测试、仓库与文件读写、对话与会话管理，入参使用 Zod 校验。
+- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询与连接测试、仓库与文件读写、对话与会话管理、AI 修改提案的查询/应用/拒绝，入参使用 Zod 校验。
 - 本地仓库选择与切换：系统目录对话框，自动识别 Git 仓库。
 - 仓库列表管理：工作区仓库下拉项悬停显示删除按钮，确认后把仓库移出应用列表；只移除登记与数据库记录，不删除磁盘文件，关联历史会话保留并解除关联，当前仓库被移除时自动切换到下一个。
 - SQLite 持久化：`better-sqlite3`（N-API 预编译）在 `userData` 下创建 `devpilot.db`；`user_version` 迁移管理 `repositories`、`conversations`、`messages`、`edit_sessions`、`file_edits` 基础表与外键/索引；仓库列表跨启动保留并自动恢复最近仓库。
@@ -31,6 +31,11 @@
 - 工具调用摘要落库：重启或切换会话后仍可查看调用过程；只保存摘要，不保存文件内容、搜索片段或 Git 输出。
 - 工具安全边界：全部只读；参数经 Zod 严格校验；敏感文件/目录与高置信密钥内容被阻断；工具输出声明为不可信数据，提示注入不能覆盖系统规则。
 - 资源限制：最多 5 轮、每轮 4 次、单请求 12 次工具调用，单工具 15 秒超时、12k 字符，单请求累计 32k 字符；重复调用直接阻止。
+- AI 修改闭环（阶段 6）：第六个工具 `propose_file_edit` 只生成待审核建议，不直接写盘；支持精确替换（`oldText` 必须唯一出现）与新建文件，不支持删除。
+- Diff 审核界面：工作区“变更与 Diff”面板新增“AI 建议”标签，使用 Monaco Diff Editor 只读并排展示原文件与建议内容，逐文件应用或拒绝；多文件提案按请求分组，应用/拒绝后自动更新待审核计数。
+- 应用安全复核：写入前重新校验仓库相对路径、目标状态与原始 SHA-256；文件被外部修改时标记“已过期”并拒绝覆盖；新建目标已存在时同样拒绝。已应用/已拒绝的提案不能重复处理。
+- 应用结果反馈：成功后重新读取文件、打开标签并刷新 Git 状态（新建还会刷新文件树）；目标存在未保存编辑时会提示覆盖风险；多文件逐项处理，部分失败不影响已成功的文件。
+- 提案持久化：`edit_sessions` / `file_edits` 保存原始与建议内容，重启或切换会话后仍可继续审核；提案只保存在本地 SQLite，不会额外上传。
 - 浅色 / 深色双主题：侧边栏底部一键切换，设置页“外观”可选择；偏好保存在本地（localStorage），启动时预加载避免闪烁，Monaco、Markdown 代码高亮与 Diff 配色同步切换。
 - 全局导航与三个页面：研发对话、研发工作区（IDE 三栏布局）、设置。
 - Pinia Store：`repository`、`chat`、`workspace`，承载当前 UI 状态。
@@ -40,20 +45,20 @@
 
 ## 技术栈
 
-| 层次       | 技术                                        |
-| ---------- | ------------------------------------------- |
-| 桌面容器   | Electron 44                                 |
-| 工程脚手架 | electron-vite 6 + Vite 8                    |
-| UI         | Vue 3.5 + TypeScript 5.9                    |
-| 路由/状态  | Vue Router 4 + Pinia 3                      |
-| UI 组件    | Element Plus 2 + 自定义暗色主题             |
-| 代码编辑   | Monaco Editor 0.57（本地 Worker、手动保存） |
-| Git        | 系统 Git CLI（只读 status/diff，参数数组）  |
-| 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）  |
-| AI 接入    | LangChain.js（@langchain/deepseek）         |
-| 数据校验   | Zod 4                                       |
-| 测试/规范  | Vitest 5、ESLint 10、Prettier 3             |
-| 代码检索   | 内置 ripgrep（`search_code`，只读）         |
+| 层次       | 技术                                                   |
+| ---------- | ------------------------------------------------------ |
+| 桌面容器   | Electron 44                                            |
+| 工程脚手架 | electron-vite 6 + Vite 8                               |
+| UI         | Vue 3.5 + TypeScript 5.9                               |
+| 路由/状态  | Vue Router 4 + Pinia 3                                 |
+| UI 组件    | Element Plus 2 + 自定义暗色主题                        |
+| 代码编辑   | Monaco Editor 0.57（本地 Worker、手动保存、Diff 审核） |
+| Git        | 系统 Git CLI（只读 status/diff，参数数组）             |
+| 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）             |
+| AI 接入    | LangChain.js（@langchain/deepseek）                    |
+| 数据校验   | Zod 4                                                  |
+| 测试/规范  | Vitest 5、ESLint 10、Prettier 3                        |
+| 代码检索   | 内置 ripgrep（`search_code`，只读）                    |
 
 ## 环境要求
 
@@ -112,15 +117,15 @@ V1 按项目决定采用**本地 `.env`**，不提供应用内密钥编辑：
 - IPC 入参由主进程重新校验，错误以稳定错误码返回。
 - 用户手动编辑保存会重新校验路径与文件哈希，外部修改不会被静默覆盖。
 - Git 只读：仅执行固定的 `status` / `diff` / `rev-parse` / `branch` 参数数组，`shell: false`，无提交、暂存或推送操作，并限制超时与输出大小。
-- AI 对话与工具：仅主进程持有模型请求、工具执行与 AbortController；系统提示禁止编造文件内容、路径与行号，未关联仓库时明确声明未读取文件；取消、超时或失败的部分回答不写入数据库。阶段 5 起，模型调用只读工具时会发送被读取的文件片段与搜索片段到云端模型，界面会持续提示。
-- AI 修改文件必须经过 Diff 展示与用户确认（阶段 6 实现）。
+- AI 对话与工具：仅主进程持有模型请求、工具执行与 AbortController；系统提示禁止编造文件内容、路径与行号，未关联仓库时明确声明未读取文件；取消、超时或失败的部分回答不写入数据库。阶段 5 起，模型调用只读工具时会发送被读取的文件片段与搜索片段到云端模型，界面会持续提示。阶段 6 起，AI 生成的修改建议同样会作为工具参数发送到云端模型。
+- AI 修改文件必须经过工作区 Diff 展示与用户逐文件确认；未确认的提案不写盘，外部修改会阻止应用。
 - 页面禁止任意导航，外部链接仅允许 `https://` 通过系统浏览器打开。
 
 ## 数据目录
 
 Electron `userData` 目录（Windows 通常为 `%APPDATA%\DevPilot`）用于保存 `.env`
 与 SQLite 数据库 `devpilot.db`（含 WAL 日志文件）。数据库由主进程启动时创建并执行迁移，
-保存仓库元数据、对话、消息与工具调用摘要；应用退出时先中止进行中的模型请求，再关闭连接。若初始化失败，
+保存仓库元数据、对话、消息、工具调用摘要与 AI 修改提案（仅被提议文件的原始/建议内容）；应用退出时先中止进行中的模型请求，再关闭连接。若初始化失败，
 应用仍可启动，但本次运行不会持久化仓库或对话。
 
 ## 目录结构
@@ -138,11 +143,10 @@ docs/            # 技术设计、开发计划、安全说明、架构决策、�
 ## 已知限制
 
 - `search_code` 默认使用内置 ripgrep；安装包中的 asar 解包配置尚未验证（阶段 7），开发环境直接从 `node_modules/@vscode/ripgrep` 加载。
-- 工具仅只读；AI 提议修改文件、Diff 审核与应用流程尚未接入（阶段 6）。
-- SQLite 中的 `edit_sessions`、`file_edits` 表仍为阶段 6 预留。
-- 目前已支持手动编辑与保存；AI 提议修改的 Diff 审核尚未接入（阶段 6）。
-- Git 集成目前只读；暂存、提交、分支切换与 AI 提议修改的 Diff 审核（阶段 6）尚未接入。
-- Diff 视图为纯文本统一 Diff，尚未使用 Monaco Diff Editor（阶段 6）。
+- AI 只能提议修改或新建文件，不能删除文件；不支持批量应用、会话级撤销或自动格式化。
+- 多文件提案逐项应用，不是原子事务：部分失败时已成功的文件保持已应用状态，失败项标记为 `stale` 或 `failed`。
+- Git 变更视图仍为纯文本统一 Diff；Monaco Diff Editor 目前用于 AI 修改建议审核。
+- Git 集成目前只读；暂存、提交与分支切换尚未接入。
 - 尚未生成 Windows 安装包，better-sqlite3 在安装包内的加载验证未开始（阶段 7）。
 - 应用图标暂用脚手架占位图。
 - Element Plus 与 Monaco 当前为全量引入，Renderer 产物与语言 Worker 体积较大，后续可按需引入优化。

@@ -8,6 +8,7 @@ import type {
   RetryChatResult,
   SendChatResult
 } from './chat'
+import type { ApplyFileEditResult, EditSession, FileEdit } from './edit'
 import type { GitDiffResult, GitStatus } from './git'
 import type { IpcResult } from './ipc'
 import type { FileContent, FileTreeResult, FileWriteResult, RepositorySummary } from './repository'
@@ -58,5 +59,10 @@ export interface DevPilotApi {
   git: {
     status(repositoryId: string): Promise<IpcResult<GitStatus>>
     diff(repositoryId: string, relativePath: string): Promise<IpcResult<GitDiffResult>>
+  }
+  edit: {
+    listPending(conversationId: string): Promise<IpcResult<EditSession[]>>
+    applyFile(editSessionId: string, fileEditId: string): Promise<IpcResult<ApplyFileEditResult>>
+    rejectFile(editSessionId: string, fileEditId: string): Promise<IpcResult<FileEdit>>
   }
 }

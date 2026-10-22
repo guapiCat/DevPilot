@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { FileEditOperation } from '@shared/types/edit'
 import type { ModelToolDefinition } from '../model-adapter'
 
 export type ToolErrorCode =
@@ -7,9 +8,11 @@ export type ToolErrorCode =
   | 'SENSITIVE_FILE'
   | 'PATH_NOT_ALLOWED'
   | 'FILE_NOT_FOUND'
+  | 'FILE_ALREADY_EXISTS'
   | 'REPOSITORY_NOT_FOUND'
   | 'UNSUPPORTED_FILE'
   | 'FILE_TOO_LARGE'
+  | 'EDIT_CONFLICT'
   | 'RG_NOT_AVAILABLE'
   | 'SEARCH_FAILED'
   | 'NOT_A_GIT_REPOSITORY'
@@ -28,9 +31,35 @@ export class ToolExecutionError extends Error {
   }
 }
 
+export interface EditProposalRequest {
+  repositoryId: string
+  conversationId: string
+  runId: string
+  relativePath: string
+  operation: FileEditOperation
+  oldText?: string
+  newText?: string
+  content?: string
+}
+
+export interface EditProposalService {
+  propose(input: EditProposalRequest): Promise<{ editSessionId: string; fileEditId: string }>
+}
+
+export interface EditProposedEvent {
+  editSessionId: string
+  fileEditId: string
+  relativePath: string
+  operation: FileEditOperation
+}
+
 export interface ToolContext {
   repositoryId: string
   signal: AbortSignal
+  conversationId?: string
+  runId?: string
+  editService?: EditProposalService
+  onEditProposed?: (event: EditProposedEvent) => void
 }
 
 export interface ToolResult {

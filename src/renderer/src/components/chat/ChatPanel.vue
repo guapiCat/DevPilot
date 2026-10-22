@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { useRoute, useRouter } from 'vue-router'
 import ChatComposer from './ChatComposer.vue'
 import MessageList from './MessageList.vue'
 import { useChatStore } from '@renderer/stores/chat'
+import { useEditStore } from '@renderer/stores/edits'
+import { useWorkspaceStore } from '@renderer/stores/workspace'
 
 const props = withDefaults(
   defineProps<{
@@ -13,6 +16,10 @@ const props = withDefaults(
 )
 
 const chat = useChatStore()
+const edits = useEditStore()
+const workspace = useWorkspaceStore()
+const router = useRouter()
+const route = useRoute()
 const {
   activeMessages,
   isGenerating,
@@ -22,6 +29,16 @@ const {
   aiConfigured,
   aiConfigLoading
 } = storeToRefs(chat)
+const { totalCount } = storeToRefs(edits)
+
+function goReview(): void {
+  workspace.diffPanelVisible = true
+  edits.selectFirst()
+
+  if (route.name !== 'workspace') {
+    void router.push({ name: 'workspace' })
+  }
+}
 
 function handleSend(content: string): void {
   void chat.sendMessage(content, props.repositoryId)
@@ -61,6 +78,21 @@ function handleRetry(): void {
     </el-alert>
 
     <el-alert
+      v-if="totalCount > 0"
+      class="panel-alert edit-alert"
+      type="info"
+      show-icon
+      :closable="false"
+    >
+      <template #title>
+        <span>有 {{ totalCount }} 个文件修改建议待审核</span>
+        <el-button link type="primary" size="small" class="review-link" @click="goReview">
+          去审核
+        </el-button>
+      </template>
+    </el-alert>
+
+    <el-alert
       v-if="errorMessage"
       class="panel-alert"
       :title="errorMessage"
@@ -95,6 +127,14 @@ function handleRetry(): void {
 .inline-link {
   color: var(--dp-accent);
   text-decoration: underline;
+}
+
+.edit-alert {
+  color: var(--dp-text-secondary);
+}
+
+.review-link {
+  margin-left: 8px;
 }
 
 .is-compact .panel-alert {

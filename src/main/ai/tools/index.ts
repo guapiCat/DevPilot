@@ -1,5 +1,6 @@
 import { createGitDiffTool, createGitStatusTool } from './git.tools'
 import { createListFilesTool } from './list-files.tool'
+import { createProposeEditTool } from './propose-edit.tool'
 import { createReadFileTool } from './read-file.tool'
 import { createSearchCodeTool } from './search-code.tool'
 import { ToolRegistry } from './tool-registry'
@@ -11,6 +12,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(createSearchCodeTool())
   registry.register(createGitStatusTool())
   registry.register(createGitDiffTool())
+  registry.register(createProposeEditTool())
   return registry
 }
 

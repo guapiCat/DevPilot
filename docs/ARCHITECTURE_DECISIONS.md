@@ -152,3 +152,21 @@
 - 事件协议新增非终态 `tool_started` / `tool_finished`，仍走固定 `chat:event` channel；`completed` / `cancelled` / `error` 的单一终态语义不变。工具事件同时由对话页与工作区 AI 面板消费，二者共享同一 Pinia chat store。
 
 **影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。`search_code` 默认使用随包内置 ripgrep，不依赖系统安装；安装包需将 `@vscode/ripgrep` 的二进制目录加入 asarUnpack（阶段 7 验证）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。
+
+## ADR-014：AI 修改采用“精确替换提案 + 用户逐文件确认”
+
+**背景**：阶段 6 需要让 AI 提议修改并应用到工作区，同时保证模型不能绕过用户直接写盘。候选方案包括让模型输出完整新文件内容、输出统一 Diff、输出结构化编辑指令（如 JSON Patch），或基于 `oldText/newText` 的精确替换。完整新文件容易让模型编造未读取的部分；统一 Diff 需要额外解析且对上下文行敏感；JSON Patch 对模型不友好。
+
+**决策**：
+
+- 新增第六个工具 `propose_file_edit`，支持 `modify` 与 `create` 两种操作，**不支持删除**。工具只创建待审核提案，不写盘；写入仍只发生在用户逐文件应用时。
+- `modify` 使用精确替换：模型提供 `oldText`（必须与当前文件完全一致且在文件中唯一出现）与 `newText`；主进程读取文件、统计出现次数并派生完整建议内容。0 次或多次出现返回 `EDIT_CONFLICT`，要求模型先读取文件或提供更长片段。`create` 提供完整 `content`，目标已存在返回 `FILE_ALREADY_EXISTS`。
+- 提案按“请求”分组：同一 `conversationId + runId` 的多个文件写入同一 `edit_sessions` 记录，单会话最多 20 个文件；同一文件在会话内只允许一条待审核建议，避免对同一基准内容叠加冲突修改。
+- 提案持久化复用 v1 已创建的 `edit_sessions` / `file_edits` 表，不新增迁移；`original_content` 保存修改前内容，`proposed_content` 保存建议内容，`original_hash` 保存读取时的 SHA-256。`create` 的 `original_hash` 记为 `''`（空字符串）表示“目标必须不存在”，避免为此改表。
+- 应用流程：`EditService.applyFile()` 重新按仓库 ID + 相对路径解析目标；`modify` 走 `FileService.write(..., originalHash)` 复核哈希，`create` 走 `FileService.writeNew()`（`wx` 临时文件 + 重命名）。`FILE_CHANGED` / `FILE_ALREADY_EXISTS` 将提案标记 `stale` 并返回可读错误；其他写入错误标记 `failed`。拒绝只把状态改为 `rejected`。
+- 会话状态：仍有 `proposed` 或 `stale` 文件时为 `active`，全部处理完后自动 `completed`；只有 `active` 且存在待审核/过期文件的会话会在“AI 建议”面板中列出。
+- 事件协议新增非终态 `edit_proposed`，携带 `editSessionId` / `fileEditId` / `relativePath` / `operation`；Renderer 收到后按当前会话重新加载待审核列表。`completed` / `cancelled` / `error` 的单一终态语义不变。
+- 审核 UI 复用工作区 Diff 面板：新增“AI 建议 / Git 变更”标签，AI 建议使用 Monaco Diff Editor 只读并排展示，逐文件展示操作类型与状态。面板只显示当前仓库的提案，其他仓库的提案保留在数据库中。
+- 敏感文件在工具层与服务层双重阻断；提案内容限制 1 MB、拒绝空字符；应用前若目标文件有未保存编辑，界面会明确提示将覆盖。
+
+**影响**：AI 修改必须经过用户逐文件确认，模型无法通过工具直接写盘、删除文件或执行任意命令。提案内容会保存在本地 SQLite 中（仅被提议的文件，不含整仓），因此数据库不再只保存元数据；这些内容不上传到除模型请求以外的任何位置。多文件应用不是原子操作：每个文件独立应用并展示结果，部分失败时已成功的文件保持已应用状态，失败项标记 `stale`/`failed`，界面不会宣称整体成功。自动格式化、删除文件、批量应用与会话级撤销留待后续阶段评估。

@@ -12,6 +12,7 @@ import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { onBeforeRouteLeave } from 'vue-router'
 import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
+import type { AppliedFileEdit } from '@shared/types/edit'
 import type { RepositorySummary } from '@shared/types/repository'
 import ChatPanel from '@renderer/components/chat/ChatPanel.vue'
 import DiffPanel from '@renderer/components/diff/DiffPanel.vue'
@@ -201,6 +202,25 @@ async function handleOpenFile(relativePath: string): Promise<void> {
       workspace.setFileLoadingPath(null)
     }
   }
+}
+
+async function handleEditApplied(payload: AppliedFileEdit): Promise<void> {
+  const currentRepository = activeRepository.value
+  if (!currentRepository) return
+
+  try {
+    const content = await desktopApi.file.read(currentRepository.id, payload.relativePath)
+    workspace.setFileContent(payload.relativePath, content)
+  } catch (error) {
+    workspace.setFileError(payload.relativePath, toErrorMessage(error))
+  }
+
+  workspace.openFile(payload.relativePath)
+
+  if (payload.operation === 'create') {
+    await loadRepositoryTree(currentRepository.id)
+  }
+  void repository.refreshGitStatus()
 }
 
 async function handleNewConversation(): Promise<void> {
@@ -402,7 +422,7 @@ onBeforeUnmount(() => {
         </aside>
       </div>
 
-      <DiffPanel @open="handleOpenFile" />
+      <DiffPanel @open="handleOpenFile" @applied="handleEditApplied" />
     </div>
   </div>
 </template>

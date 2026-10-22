@@ -139,6 +139,45 @@ export class FileService {
       hash: sha256(buffer)
     }
   }
+
+  async writeNew(
+    repositoryId: string,
+    relativePath: string,
+    content: string
+  ): Promise<FileWriteResult> {
+    if (content.includes('\0')) {
+      throw new ServiceError('UNSUPPORTED_FILE', '文件内容不能包含空字符')
+    }
+
+    const buffer = Buffer.from(content, 'utf8')
+    if (buffer.length > MAX_FILE_WRITE_BYTES) {
+      throw new ServiceError(
+        'FILE_TOO_LARGE',
+        `文件超过 ${formatLimitMb(MAX_FILE_WRITE_BYTES)} 写入上限`
+      )
+    }
+
+    const targetPath = await this.repositories.resolveNewFilePath(repositoryId, relativePath)
+    const tempPath = join(dirname(targetPath), `.devpilot-${randomUUID()}.tmp`)
+
+    try {
+      await writeFile(tempPath, buffer, { flag: 'wx' })
+      await rename(tempPath, targetPath)
+    } catch (error) {
+      await unlink(tempPath).catch(() => undefined)
+      const code = (error as NodeJS.ErrnoException | null)?.code ?? 'unknown'
+      console.error(`[file] 新建文件失败: ${code}`)
+      throw new ServiceError('FILE_WRITE_FAILED', '文件创建失败，请检查目录权限后重试')
+    }
+
+    return {
+      repositoryId,
+      relativePath,
+      size: buffer.length,
+      hadBom: false,
+      hash: sha256(buffer)
+    }
+  }
 }
 
 export const fileService = new FileService()

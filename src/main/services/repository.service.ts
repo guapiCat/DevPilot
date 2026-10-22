@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
-import { basename, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import {
   IGNORED_DIRECTORY_NAMES,
   MAX_FILE_TREE_DEPTH,
@@ -253,6 +253,44 @@ export class RepositoryService {
 
     if (!isPathInside(entry.realRoot, targetPath)) {
       throw new ServiceError('PATH_NOT_ALLOWED', '文件路径不在授权仓库范围内')
+    }
+
+    return targetPath
+  }
+
+  async resolveNewFilePath(repositoryId: string, relativePath: string): Promise<string> {
+    const entry = this.registry.get(repositoryId)
+    if (!entry) {
+      throw new ServiceError('REPOSITORY_NOT_FOUND', '仓库不存在或尚未登记')
+    }
+
+    if (!isSafeRelativePath(relativePath)) {
+      throw new ServiceError('PATH_NOT_ALLOWED', '文件路径不在授权仓库范围内')
+    }
+
+    const candidate = resolve(entry.realRoot, ...relativePath.split(/[\\/]+/))
+    if (!isPathInside(entry.realRoot, candidate)) {
+      throw new ServiceError('PATH_NOT_ALLOWED', '文件路径不在授权仓库范围内')
+    }
+
+    // 新文件不存在，无法 realpath 自身；改为校验已存在的父目录是否仍在仓库内。
+    let realParent: string
+    try {
+      realParent = await realpath(dirname(candidate))
+    } catch (error) {
+      if (isEnoent(error)) {
+        throw new ServiceError('FILE_NOT_FOUND', '目标文件的父目录不存在')
+      }
+      throw new ServiceError('PATH_NOT_ALLOWED', '无法安全解析文件路径')
+    }
+
+    const targetPath = join(realParent, basename(candidate))
+    if (!isPathInside(entry.realRoot, targetPath)) {
+      throw new ServiceError('PATH_NOT_ALLOWED', '文件路径不在授权仓库范围内')
+    }
+
+    if (existsSync(targetPath)) {
+      throw new ServiceError('FILE_ALREADY_EXISTS', '目标文件已存在，请使用修改操作')
     }
 
     return targetPath

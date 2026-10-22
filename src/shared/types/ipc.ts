@@ -18,6 +18,9 @@ export type ErrorCode =
   | 'TOOL_EXECUTION_FAILED'
   | 'REQUEST_CANCELLED'
   | 'DATABASE_ERROR'
+  | 'EDIT_NOT_FOUND'
+  | 'EDIT_CONFLICT'
+  | 'FILE_ALREADY_EXISTS'
   | 'INTERNAL_ERROR'
 
 export interface IpcErrorPayload {

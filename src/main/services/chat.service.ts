@@ -23,8 +23,9 @@ import { createDeepSeekAdapter, resolveAiConfig } from '../ai/model-manager'
 import { ModelAdapterError } from '../ai/model-error'
 import type { ModelAdapter } from '../ai/model-adapter'
 import { buildModelMessages } from '../ai/prompt-builder'
-import type { ToolRegistry } from '../ai/tools/tool-registry'
+import type { EditProposalService, ToolRegistry } from '../ai/tools/tool-registry'
 import type { ChatStore } from '../database/chat.store'
+import { editService } from './edit.service'
 import type { ResolvedAiConfig } from './settings.service'
 import { repositoryService } from './repository.service'
 import { ServiceError } from '../utils/service-error'
@@ -52,6 +53,7 @@ export interface ChatServiceOptions {
   env?: NodeJS.ProcessEnv
   locateRepository?: RepositoryLocator
   toolRegistry?: ToolRegistry
+  editService?: EditProposalService | null
   agentLimits?: Partial<AgentLimits>
 }
 
@@ -75,6 +77,7 @@ export class ChatService {
   private readonly env: NodeJS.ProcessEnv
   private readonly locateRepository: RepositoryLocator
   private readonly toolRegistry: ToolRegistry | null
+  private readonly editService: EditProposalService | null
   private readonly agentLimits: Partial<AgentLimits>
 
   constructor(options: ChatServiceOptions = {}) {
@@ -85,6 +88,7 @@ export class ChatService {
     this.env = options.env ?? process.env
     this.locateRepository = options.locateRepository ?? defaultLocateRepository
     this.toolRegistry = options.toolRegistry ?? null
+    this.editService = options.editService ?? null
     this.agentLimits = options.agentLimits ?? {}
   }
 
@@ -285,6 +289,9 @@ export class ChatService {
         adapter,
         registry: toolsEnabled ? this.toolRegistry : null,
         repositoryId: conversation.repositoryId,
+        conversationId: conversation.id,
+        runId: run.requestId,
+        editService: toolsEnabled ? this.editService : null,
         messages,
         signal: run.controller.signal,
         limits: this.agentLimits,
@@ -320,6 +327,17 @@ export class ChatService {
               status: record.status,
               summary: record.summary,
               durationMs: record.durationMs
+            })
+          },
+          onEditProposed: (proposal) => {
+            this.emit(run, {
+              type: 'edit_proposed',
+              requestId: run.requestId,
+              conversationId: run.conversationId,
+              editSessionId: proposal.editSessionId,
+              fileEditId: proposal.fileEditId,
+              relativePath: proposal.relativePath,
+              operation: proposal.operation
             })
           },
           onUsage: () => undefined
@@ -455,4 +473,7 @@ export class ChatService {
   }
 }
 
-export const chatService = new ChatService({ toolRegistry: createDefaultToolRegistry() })
+export const chatService = new ChatService({
+  toolRegistry: createDefaultToolRegistry(),
+  editService
+})

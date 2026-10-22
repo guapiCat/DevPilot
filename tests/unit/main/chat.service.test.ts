@@ -534,6 +534,79 @@ describe('ChatService 工具循环', () => {
     expect(JSON.stringify(messages[1].toolCalls)).not.toContain('file content')
   })
 
+  it('工具提交修改建议时发送 edit_proposed 事件', async () => {
+    let round = 0
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'propose_file_edit',
+      description: '生成修改建议',
+      schema: z.strictObject({ path: z.string() }),
+      summarizeArgs: (args) => args.path,
+      async execute(args, context) {
+        context.onEditProposed?.({
+          editSessionId: 'session-1',
+          fileEditId: 'file-1',
+          relativePath: args.path,
+          operation: 'modify'
+        })
+        return {
+          content: '修改建议已提交审核',
+          summary: `${args.path} 修改建议待审核`,
+          truncated: false
+        }
+      }
+    })
+
+    const service = createService(
+      async function* (request) {
+        if (request.tools && round === 0) {
+          round += 1
+          yield {
+            type: 'tool_call',
+            id: 'call_edit',
+            name: 'propose_file_edit',
+            arguments: { path: 'src/a.ts' }
+          }
+          return
+        }
+        yield textDelta('建议已生成，请在 Diff 面板确认。')
+      },
+      {
+        toolRegistry: registry,
+        locateRepository: () => ({ name: 'demo-repo' })
+      }
+    )
+    const conversation = service.createConversation('repo-1')
+    const { events, sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '改一下 a.ts' },
+      sink
+    )
+    const editEvent = await waitFor((event) => event.type === 'edit_proposed')
+    await waitFor((event) => event.type === 'completed')
+
+    expect(editEvent.type).toBe('edit_proposed')
+    if (editEvent.type === 'edit_proposed') {
+      expect(editEvent).toMatchObject({
+        conversationId: conversation.id,
+        editSessionId: 'session-1',
+        fileEditId: 'file-1',
+        relativePath: 'src/a.ts',
+        operation: 'modify'
+      })
+    }
+
+    expect(events.map((event) => event.type)).toEqual([
+      'started',
+      'tool_started',
+      'edit_proposed',
+      'tool_finished',
+      'text_delta',
+      'completed'
+    ])
+  })
+
   it('未关联仓库时不向模型绑定工具', async () => {
     const requests: ModelStreamRequest[] = []
     const registry = createToolRegistry(async () => ({

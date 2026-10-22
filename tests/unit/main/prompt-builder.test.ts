@@ -22,15 +22,23 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('当前关联仓库')
   })
 
-  it('有工具时列出只读工具、行号引用与不可信数据约束', () => {
+  it('有工具时列出代码理解与修改建议工具、行号引用与不可信数据约束', () => {
     const prompt = buildSystemPrompt({ toolsEnabled: true })
     expect(prompt).toContain('list_files')
     expect(prompt).toContain('search_code')
     expect(prompt).toContain('read_file')
+    expect(prompt).toContain('propose_file_edit')
     expect(prompt).toContain('相对路径与行号')
     expect(prompt).toContain('省略 path 参数')
     expect(prompt).toContain('<tool_result>')
     expect(prompt).toContain('敏感文件已被阻止')
+  })
+
+  it('有工具时要求修改建议等待用户在工作区 Diff 面板确认', () => {
+    const prompt = buildSystemPrompt({ toolsEnabled: true })
+    expect(prompt).toContain('oldText 必须在当前文件中唯一出现')
+    expect(prompt).toContain('用户在工作区 Diff 面板确认后才会写入')
+    expect(prompt).toContain('不要声称文件已修改')
   })
 
   it('只注入仓库名称', () => {

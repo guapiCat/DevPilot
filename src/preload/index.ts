@@ -51,6 +51,13 @@ const api: DevPilotApi = {
     status: (repositoryId) => invoke(IPC_CHANNELS.gitStatus, { repositoryId }),
     diff: (repositoryId, relativePath) =>
       invoke(IPC_CHANNELS.gitDiff, { repositoryId, relativePath })
+  },
+  edit: {
+    listPending: (conversationId) => invoke(IPC_CHANNELS.editListPending, { conversationId }),
+    applyFile: (editSessionId, fileEditId) =>
+      invoke(IPC_CHANNELS.editApplyFile, { editSessionId, fileEditId }),
+    rejectFile: (editSessionId, fileEditId) =>
+      invoke(IPC_CHANNELS.editRejectFile, { editSessionId, fileEditId })
   }
 }
 

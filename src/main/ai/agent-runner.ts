@@ -17,7 +17,13 @@ import type {
   ModelToolDefinition
 } from './model-adapter'
 import { capText, clampText, formatToolError } from './tools/output'
-import { ToolExecutionError, type ToolRegistry } from './tools/tool-registry'
+import {
+  ToolExecutionError,
+  type EditProposalService,
+  type EditProposedEvent,
+  type ToolContext,
+  type ToolRegistry
+} from './tools/tool-registry'
 
 export interface AgentLimits {
   maxRounds: number
@@ -44,12 +50,16 @@ export interface AgentCallbacks {
   onToolStarted(call: { id: string; name: string; argsSummary: string }): void
   onToolFinished(record: ToolCallRecord): void
   onUsage(usage: { inputTokens?: number; outputTokens?: number }): void
+  onEditProposed?(event: EditProposedEvent): void
 }
 
 export interface AgentRunInput {
   adapter: ModelAdapter
   registry: ToolRegistry | null
   repositoryId: string | null
+  conversationId?: string | null
+  runId?: string
+  editService?: EditProposalService | null
   messages: ModelMessage[]
   signal: AbortSignal
   callbacks: AgentCallbacks
@@ -102,7 +112,7 @@ export function stableStringify(value: unknown): string {
 async function executeToolCall(
   call: ModelToolCall,
   registry: ToolRegistry,
-  repositoryId: string,
+  context: Omit<ToolContext, 'signal'>,
   runSignal: AbortSignal,
   timeoutMs: number
 ): Promise<ToolOutcome> {
@@ -124,7 +134,7 @@ async function executeToolCall(
     else runSignal.addEventListener('abort', abortListener, { once: true })
   })
 
-  const execution = registry.execute(call.name, call.arguments, { repositoryId, signal: combined })
+  const execution = registry.execute(call.name, call.arguments, { ...context, signal: combined })
   // 工具被中止/超时后仍可能迟到 reject，这里提前吞掉，避免未处理拒绝。
   execution.catch(() => undefined)
 
@@ -168,6 +178,14 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   const limits: AgentLimits = { ...DEFAULT_AGENT_LIMITS, ...input.limits }
   const tools: ModelToolDefinition[] =
     input.registry && input.repositoryId ? input.registry.toModelTools() : []
+
+  const toolContext: Omit<ToolContext, 'signal'> = {
+    repositoryId: input.repositoryId ?? '',
+    conversationId: input.conversationId ?? undefined,
+    runId: input.runId,
+    editService: input.editService ?? undefined,
+    onEditProposed: input.callbacks.onEditProposed
+  }
 
   const messages: ModelMessage[] = [...input.messages]
   const toolCalls: ToolCallRecord[] = []
@@ -277,7 +295,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         outcome = await executeToolCall(
           call,
           input.registry as ToolRegistry,
-          input.repositoryId as string,
+          toolContext,
           input.signal,
           limits.toolTimeoutMs
         )

@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Close, Document, Files, Refresh } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
+import type { AppliedFileEdit } from '@shared/types/edit'
 import type { GitFileStatus } from '@shared/types/git'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
+import ProposalReview from '@renderer/components/diff/ProposalReview.vue'
+import { useChatStore } from '@renderer/stores/chat'
+import { useEditStore } from '@renderer/stores/edits'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
 
@@ -21,11 +25,31 @@ const STATUS_META: Record<GitFileStatus, { label: string; className: string }> =
 
 const emit = defineEmits<{
   open: [relativePath: string]
+  applied: [payload: AppliedFileEdit]
 }>()
 
 const repository = useRepositoryStore()
 const workspace = useWorkspaceStore()
+const chat = useChatStore()
+const edits = useEditStore()
 const { diffPanelVisible } = storeToRefs(workspace)
+const { activeConversationId } = storeToRefs(chat)
+const { totalCount } = storeToRefs(edits)
+
+type PanelMode = 'proposals' | 'git'
+const mode = ref<PanelMode>(edits.totalCount > 0 ? 'proposals' : 'git')
+
+watch(totalCount, (count, previous) => {
+  if (count > 0 && previous === 0) mode.value = 'proposals'
+})
+
+watch(
+  activeConversationId,
+  (conversationId) => {
+    void edits.loadPending(conversationId)
+  },
+  { immediate: true }
+)
 const {
   activeRepository,
   gitStatus,
@@ -90,6 +114,10 @@ function canOpenSelected(): boolean {
 }
 
 function refresh(): void {
+  if (mode.value === 'proposals') {
+    void edits.loadPending(activeConversationId.value)
+    return
+  }
   void repository.refreshGitStatus()
 }
 
@@ -97,16 +125,43 @@ function openSelected(): void {
   if (!selectedGitPath.value || !canOpenSelected()) return
   emit('open', selectedGitPath.value)
 }
+
+function openFile(relativePath: string): void {
+  emit('open', relativePath)
+}
+
+function handleApplied(payload: AppliedFileEdit): void {
+  emit('applied', payload)
+}
 </script>
 
 <template>
   <section v-if="diffPanelVisible" class="diff-panel">
     <header class="panel-header">
       <div class="panel-heading">
-        <span>变更与 Diff</span>
-        <span v-if="activeRepository?.isGitRepository" class="branch-badge">
+        <div class="panel-tabs">
+          <button
+            type="button"
+            class="panel-tab"
+            :class="{ active: mode === 'proposals' }"
+            @click="mode = 'proposals'"
+          >
+            AI 建议
+            <span v-if="totalCount > 0" class="tab-count">{{ totalCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="panel-tab"
+            :class="{ active: mode === 'git' }"
+            @click="mode = 'git'"
+          >
+            Git 变更
+            <span v-if="gitChangeCount > 0" class="tab-count">{{ gitChangeCount }}</span>
+          </button>
+        </div>
+
+        <span v-if="mode === 'git' && activeRepository?.isGitRepository" class="branch-badge">
           {{ branchLabel }}
-          <template v-if="gitChangeCount > 0">· {{ gitChangeCount }}</template>
         </span>
       </div>
 
@@ -114,9 +169,9 @@ function openSelected(): void {
         <el-button
           text
           size="small"
-          :loading="gitStatusLoading"
-          :disabled="!activeRepository?.isGitRepository"
-          title="刷新 Git 状态"
+          :loading="mode === 'git' ? gitStatusLoading : false"
+          :disabled="mode === 'git' && !activeRepository?.isGitRepository"
+          :title="mode === 'proposals' ? '刷新修改建议' : '刷新 Git 状态'"
           @click="refresh"
         >
           <el-icon><Refresh /></el-icon>
@@ -127,7 +182,14 @@ function openSelected(): void {
       </div>
     </header>
 
-    <div v-if="!activeRepository" class="panel-body">
+    <ProposalReview
+      v-if="mode === 'proposals'"
+      class="proposal-host"
+      @applied="handleApplied"
+      @open="openFile"
+    />
+
+    <div v-else-if="!activeRepository" class="panel-body">
       <EmptyState
         compact
         :icon="Files"
@@ -237,9 +299,9 @@ function openSelected(): void {
 <style scoped>
 .diff-panel {
   display: flex;
-  flex: 0 0 300px;
+  flex: 0 0 320px;
   flex-direction: column;
-  height: 300px;
+  height: 320px;
   border-top: 1px solid var(--dp-border);
   background: var(--dp-bg-panel);
 }
@@ -260,6 +322,57 @@ function openSelected(): void {
   color: var(--dp-text);
   font-size: 11.5px;
   font-weight: 600;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dp-text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.panel-tab:hover {
+  background: var(--dp-bg-hover);
+  color: var(--dp-text);
+}
+
+.panel-tab.active {
+  border-color: color-mix(in srgb, var(--dp-accent) 28%, transparent);
+  background: var(--dp-accent-soft);
+  color: var(--dp-accent-text);
+}
+
+.tab-count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dp-warning) 20%, transparent);
+  color: var(--dp-warning);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.proposal-host {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .branch-badge {

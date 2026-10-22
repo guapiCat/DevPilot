@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { ChatEvent, ChatMessage, ChatMessageStatus, Conversation } from '@shared/types/chat'
 import type { ToolCallRecord } from '@shared/types/tool'
 import { desktopApi } from '@renderer/services/desktop-api'
+import { useEditStore } from '@renderer/stores/edits'
 import { toErrorMessage } from '@renderer/utils/errors'
 
 interface PendingRun {
@@ -167,6 +168,11 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
+    if (event.type === 'edit_proposed') {
+      void useEditStore().loadPending(event.conversationId)
+      return
+    }
+
     if (event.type === 'completed') {
       setMessages(
         run.conversationId,
@@ -257,6 +263,7 @@ export const useChatStore = defineStore('chat', () => {
       ]
       messagesByConversation.value[conversation.id] = []
       activeConversationId.value = conversation.id
+      useEditStore().reset()
       return conversation
     } finally {
       isCreatingConversation.value = false
@@ -303,6 +310,7 @@ export const useChatStore = defineStore('chat', () => {
     activeConversationId.value = id
     errorMessage.value = null
     retryConversationId.value = null
+    void useEditStore().loadPending(id)
 
     if (id in messagesByConversation.value) return
 

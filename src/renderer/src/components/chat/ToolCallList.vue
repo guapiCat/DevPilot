@@ -11,7 +11,8 @@ const TOOL_LABELS: Record<string, string> = {
   read_file: '读取文件',
   search_code: '搜索代码',
   get_git_status: 'Git 状态',
-  get_git_diff: 'Git 差异'
+  get_git_diff: 'Git 差异',
+  propose_file_edit: '生成修改建议'
 }
 
 const STATUS_LABELS: Record<ToolCallStatus, string> = {

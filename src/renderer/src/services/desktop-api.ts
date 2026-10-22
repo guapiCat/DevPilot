@@ -9,6 +9,7 @@ import type {
   RetryChatResult,
   SendChatResult
 } from '@shared/types/chat'
+import type { ApplyFileEditResult, EditSession, FileEdit } from '@shared/types/edit'
 import type { GitDiffResult, GitStatus } from '@shared/types/git'
 import type { ErrorCode, IpcErrorPayload, IpcResult } from '@shared/types/ipc'
 import type {
@@ -117,6 +118,17 @@ export const desktopApi = {
     },
     async getDiff(repositoryId: string, relativePath: string): Promise<GitDiffResult> {
       return unwrap(await window.devPilot.git.diff(repositoryId, relativePath))
+    }
+  },
+  edit: {
+    async listPending(conversationId: string): Promise<EditSession[]> {
+      return unwrap(await window.devPilot.edit.listPending(conversationId))
+    },
+    async applyFile(editSessionId: string, fileEditId: string): Promise<ApplyFileEditResult> {
+      return unwrap(await window.devPilot.edit.applyFile(editSessionId, fileEditId))
+    },
+    async rejectFile(editSessionId: string, fileEditId: string): Promise<FileEdit> {
+      return unwrap(await window.devPilot.edit.rejectFile(editSessionId, fileEditId))
     }
   }
 }

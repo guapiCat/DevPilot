@@ -40,6 +40,11 @@ export const MAX_TOOL_LIST_ENTRIES = 500
 export const MAX_TOOL_LIST_DEPTH = 3
 export const MAX_TOOL_READ_LINES = 300
 
+export const MAX_EDIT_FILES_PER_SESSION = 20
+export const MAX_EDIT_OLD_TEXT_CHARS = 8000
+export const MAX_EDIT_NEW_TEXT_CHARS = 20_000
+export const MAX_EDIT_CREATE_CONTENT_CHARS = 20_000
+
 export const MAX_SEARCH_QUERY_LENGTH = 200
 export const MAX_SEARCH_FILES = 40
 export const MAX_SEARCH_MATCHES = 200
@@ -76,5 +81,8 @@ export const IPC_CHANNELS = {
   chatSend: 'chat:send',
   chatRetry: 'chat:retry',
   chatCancel: 'chat:cancel',
-  chatEvent: 'chat:event'
+  chatEvent: 'chat:event',
+  editListPending: 'edit:list-pending',
+  editApplyFile: 'edit:apply-file',
+  editRejectFile: 'edit:reject-file'
 } as const
