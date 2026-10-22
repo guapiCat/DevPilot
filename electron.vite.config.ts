@@ -13,6 +13,16 @@ const mainAlias = {
   '@main': resolve('src/main')
 }
 
+// monaco-editor 的 exports 会把任意子路径补成 esm/vs/*.js，CSS 无法用裸路径导入。
+const monacoCssAlias = {
+  'monaco-editor/base/browser/ui/codicons/codicon/codicon.css': resolve(
+    'node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css'
+  ),
+  'monaco-editor/base/browser/ui/codicons/codicon/codicon-modifiers.css': resolve(
+    'node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css'
+  )
+}
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
@@ -29,7 +39,8 @@ export default defineConfig({
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
-        ...sharedAlias
+        ...sharedAlias,
+        ...monacoCssAlias
       }
     },
     plugins: [vue()]

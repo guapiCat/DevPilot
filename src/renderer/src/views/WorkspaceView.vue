@@ -666,4 +666,16 @@ onBeforeUnmount(() => {
     width: 300px;
   }
 }
+
+@media (max-width: 1080px) {
+  .explorer {
+    flex-basis: 208px;
+    width: 208px;
+  }
+
+  .ai-panel {
+    flex-basis: 268px;
+    width: 268px;
+  }
+}
 </style>

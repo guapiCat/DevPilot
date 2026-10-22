@@ -17,7 +17,7 @@
 - SQLite 持久化：`better-sqlite3`（N-API 预编译）在 `userData` 下创建 `devpilot.db`；`user_version` 迁移管理 `repositories`、`conversations`、`messages`、`edit_sessions`、`file_edits` 基础表与外键/索引；仓库列表跨启动保留并自动恢复最近仓库。
 - 安全文件访问：仓库 ID + 相对路径，`realpath` 规范化，拦截路径穿越、绝对路径与符号链接逃逸。
 - 文件树与代码查看：忽略 `.git` / `node_modules`，5000 项上限；文件读写 1 MB 上限，支持 UTF-8/BOM，拒绝二进制与非法编码。
-- Monaco Editor 代码查看与手动编辑：按扩展名自动识别语言并提供语法高亮，多标签切换，关闭标签时释放模型与编辑器实例；Worker 随应用本地打包。
+- Monaco Editor 代码查看与手动编辑：按扩展名自动识别语言并提供语法高亮，多标签切换，关闭标签时释放模型与编辑器实例；Worker 随应用本地打包，编辑器在首次打开文件时按需加载。
 - 手动保存：`Ctrl+S` 或“保存”按钮写回原文件；保存前复核路径、仓库范围与 SHA-256 哈希，外部修改会提示重新加载，不覆盖未确认的磁盘变更；保留 UTF-8 BOM，限制 1 MB 与空字符，使用临时文件原子替换。
 - 未保存修改保护：关闭标签、切换仓库、离开工作区与退出应用时提示放弃修改。
 - 只读 Git 集成：`git status --porcelain=v1 -z` 展示当前分支与工作区变更（含暂存、未跟踪、换名与冲突状态）；选择文件后展示相对 `HEAD` 的统一 Diff，未跟踪文件生成新增 Diff，未提交仓库以空树为基线；输出按 512 KB 截断，命令 10 秒超时、5 MB 上限。
@@ -45,20 +45,21 @@
 
 ## 技术栈
 
-| 层次       | 技术                                                   |
-| ---------- | ------------------------------------------------------ |
-| 桌面容器   | Electron 44                                            |
-| 工程脚手架 | electron-vite 6 + Vite 8                               |
-| UI         | Vue 3.5 + TypeScript 5.9                               |
-| 路由/状态  | Vue Router 4 + Pinia 3                                 |
-| UI 组件    | Element Plus 2 + 自定义暗色主题                        |
-| 代码编辑   | Monaco Editor 0.57（本地 Worker、手动保存、Diff 审核） |
-| Git        | 系统 Git CLI（只读 status/diff，参数数组）             |
-| 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）             |
-| AI 接入    | LangChain.js（@langchain/deepseek）                    |
-| 数据校验   | Zod 4                                                  |
-| 测试/规范  | Vitest 5、ESLint 10、Prettier 3                        |
-| 代码检索   | 内置 ripgrep（`search_code`，只读）                    |
+| 层次       | 技术                                                  |
+| ---------- | ----------------------------------------------------- |
+| 桌面容器   | Electron 44                                           |
+| 工程脚手架 | electron-vite 6 + Vite 8                              |
+| UI         | Vue 3.5 + TypeScript 5.9                              |
+| 路由/状态  | Vue Router 4 + Pinia 3                                |
+| UI 组件    | Element Plus 2（按需注册）+ 自定义暗色主题            |
+| 代码编辑   | Monaco Editor 0.57（自定义入口、按需加载、Diff 审核） |
+| 代码高亮   | highlight.js 11（按需注册常用语言）                   |
+| Git        | 系统 Git CLI（只读 status/diff，参数数组）            |
+| 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）            |
+| AI 接入    | LangChain.js（@langchain/deepseek）                   |
+| 数据校验   | Zod 4                                                 |
+| 测试/规范  | Vitest 5、ESLint 10、Prettier 3                       |
+| 代码检索   | 内置 ripgrep（`search_code`，只读）                   |
 
 ## 环境要求
 
@@ -149,4 +150,5 @@ docs/            # 技术设计、开发计划、安全说明、架构决策、�
 - Git 集成目前只读；暂存、提交与分支切换尚未接入。
 - 尚未生成 Windows 安装包，better-sqlite3 在安装包内的加载验证未开始（阶段 7）。
 - 应用图标暂用脚手架占位图。
-- Element Plus 与 Monaco 当前为全量引入，Renderer 产物与语言 Worker 体积较大，后续可按需引入优化。
+- Monaco 仅注册与文件语言映射一致的常用语言，冷门语言以纯文本显示；代码编辑器与 AI Diff 在首次打开时异步加载，首次会有短暂加载提示。
+- Element Plus 组件手动按需注册；新增组件时需在 `main.ts` 同步注册并引入对应样式。

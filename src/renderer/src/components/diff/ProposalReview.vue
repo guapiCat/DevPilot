@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, defineAsyncComponent, watch } from 'vue'
 import { Check, Close, Document, Files } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import type { AppliedFileEdit, ApplyFileEditResult } from '@shared/types/edit'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
-import ProposalDiffView from '@renderer/components/diff/ProposalDiffView.vue'
 import { DesktopApiError } from '@renderer/services/desktop-api'
 import { useChatStore } from '@renderer/stores/chat'
 import { editFileKey, useEditStore } from '@renderer/stores/edits'
@@ -17,6 +16,8 @@ const emit = defineEmits<{
   applied: [payload: AppliedFileEdit]
   open: [relativePath: string]
 }>()
+
+const ProposalDiffView = defineAsyncComponent(() => import('./ProposalDiffView.vue'))
 
 const edits = useEditStore()
 const chat = useChatStore()
@@ -152,7 +153,7 @@ async function rejectSelected(): Promise<void> {
         <el-skeleton :rows="3" animated />
       </div>
 
-      <div v-else-if="error" class="list-state">
+      <div v-else-if="error && visibleSessions.length === 0" class="list-state">
         <el-alert :title="error" type="error" show-icon :closable="false" />
       </div>
 
@@ -166,6 +167,16 @@ async function rejectSelected(): Promise<void> {
       </div>
 
       <template v-else>
+        <div v-if="loading" class="list-refreshing">正在刷新…</div>
+        <el-alert
+          v-if="error"
+          class="list-inline-error"
+          :title="error"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+
         <div v-for="session in visibleSessions" :key="session.id" class="session-group">
           <div class="session-head">
             <span>{{ new Date(session.createdAt).toLocaleTimeString('zh-CN') }}</span>
@@ -238,12 +249,19 @@ async function rejectSelected(): Promise<void> {
           文件已在磁盘上被外部修改，该建议已过期，无法应用。请让 AI 重新读取文件后生成建议。
         </div>
 
-        <ProposalDiffView
-          :key="selectedKey ?? ''"
-          :relative-path="selectedVisible.file.relativePath"
-          :original-content="selectedVisible.file.originalContent ?? ''"
-          :proposed-content="selectedVisible.file.proposedContent"
-        />
+        <Suspense>
+          <ProposalDiffView
+            :key="selectedKey ?? ''"
+            :relative-path="selectedVisible.file.relativePath"
+            :original-content="selectedVisible.file.originalContent ?? ''"
+            :proposed-content="selectedVisible.file.proposedContent"
+          />
+          <template #fallback>
+            <div class="diff-fallback">
+              <el-skeleton :rows="6" animated />
+            </div>
+          </template>
+        </Suspense>
       </template>
 
       <EmptyState
@@ -286,6 +304,22 @@ async function rejectSelected(): Promise<void> {
 
 .list-state {
   padding: 12px;
+}
+
+.list-refreshing {
+  padding: 6px 12px;
+  color: var(--dp-text-muted);
+  font-size: 10.5px;
+}
+
+.list-inline-error {
+  margin: 0 10px 6px;
+}
+
+.diff-fallback {
+  flex: 1;
+  overflow: auto;
+  padding: 18px;
 }
 
 .list-empty {
@@ -432,6 +466,13 @@ async function rejectSelected(): Promise<void> {
   .proposal-list {
     flex-basis: 250px;
     width: 250px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .proposal-list {
+    flex-basis: 220px;
+    width: 220px;
   }
 }
 </style>

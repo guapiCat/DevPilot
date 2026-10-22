@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { computed, nextTick, ref, watch } from 'vue'
 import { ChatLineRound } from '@element-plus/icons-vue'
 import type { ChatMessage } from '@shared/types/chat'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import ToolCallList from './ToolCallList.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     messages: ChatMessage[]
     generating?: boolean
@@ -17,10 +18,52 @@ withDefaults(
 const emit = defineEmits<{
   retry: []
 }>()
+
+const scroller = ref<HTMLDivElement | null>(null)
+let pinnedToBottom = true
+
+const lastMessage = computed(() => props.messages[props.messages.length - 1] ?? null)
+
+function handleScroll(): void {
+  const el = scroller.value
+  if (!el) return
+  pinnedToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+}
+
+function scrollToBottom(): void {
+  const el = scroller.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+  pinnedToBottom = true
+}
+
+watch(
+  () => ({
+    length: props.messages.length,
+    contentLength: lastMessage.value?.content.length ?? 0,
+    toolCallCount: lastMessage.value?.toolCalls?.length ?? 0,
+    generating: props.generating
+  }),
+  (next, previous) => {
+    if (next.length > previous.length && lastMessage.value?.role === 'user') {
+      void nextTick(scrollToBottom)
+      return
+    }
+    if (!pinnedToBottom) return
+    void nextTick(scrollToBottom)
+  }
+)
 </script>
 
 <template>
-  <div class="message-list">
+  <div
+    ref="scroller"
+    class="message-list"
+    role="log"
+    aria-live="polite"
+    :aria-busy="generating ? 'true' : 'false'"
+    @scroll.passive="handleScroll"
+  >
     <EmptyState
       v-if="messages.length === 0"
       :icon="ChatLineRound"

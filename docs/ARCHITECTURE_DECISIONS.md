@@ -170,3 +170,18 @@
 - 敏感文件在工具层与服务层双重阻断；提案内容限制 1 MB、拒绝空字符；应用前若目标文件有未保存编辑，界面会明确提示将覆盖。
 
 **影响**：AI 修改必须经过用户逐文件确认，模型无法通过工具直接写盘、删除文件或执行任意命令。提案内容会保存在本地 SQLite 中（仅被提议的文件，不含整仓），因此数据库不再只保存元数据；这些内容不上传到除模型请求以外的任何位置。多文件应用不是原子操作：每个文件独立应用并展示结果，部分失败时已成功的文件保持已应用状态，失败项标记 `stale`/`failed`，界面不会宣称整体成功。自动格式化、删除文件、批量应用与会话级撤销留待后续阶段评估。
+
+## ADR-015：渲染层按需加载、语言裁剪与手动组件注册
+
+**背景**：阶段 6 完成后，Renderer 产物中入口 `index` 为 1800.76 kB、`WorkspaceView` 为 2303.21 kB。Element Plus 通过 `app.use(ElementPlus)` 全量注册并引入 `dist/index.css`；Monaco 通过 `monaco-editor` 全量入口在进入工作区时同步加载，并一次性注册 84 种语言；highlight.js 使用 `lib/common` 打包约 35 种语言。上述依赖使首屏与工作区首开体积偏大。
+
+**决策**：
+
+- Monaco 使用自定义入口 `src/renderer/src/services/monaco.ts`：以 `monaco-editor/editor/editor.api` 为核心，复制 `esm/vs/editor/editor.main.js` 中除语言定义外的贡献注册（查找、折叠、Diff、悬浮、standalone 快捷命令等），只保留与 `utils/language.ts` 映射一致的 32 种语言定义。`json` 由 `languages/features/json` 提供，不单独注册定义。**升级 monaco-editor 时必须同步比对 `editor.main.js` 的贡献列表。**
+- `electron.vite.config.ts` 为 codicon 的两个 CSS 增加精确别名：monaco-editor 的 exports 会把裸子路径补成 `esm/vs/*.js`，CSS 无法直接通过包名解析。
+- Monaco 按需加载：`EditorArea` 在首次打开文件时才动态导入 Monaco 入口；AI 建议的 `ProposalDiffView` 通过 `defineAsyncComponent` + `<Suspense>` 在首次选中建议时加载。未打开文件或建议时不加载 Monaco。
+- Element Plus 手动按需注册：`main.ts` 只注册实际使用的组件并引入对应 `style/css`，语言包移至 `App.vue` 的 `el-config-provider`；`ElMessage` / `ElMessageBox` 样式单独引入。新增组件时需同时补充组件注册与样式导入。
+- highlight.js 从 `lib/common` 改为 `lib/core`，显式注册 28 种常用语言；未注册语言继续回退为转义纯文本。
+- `tsconfig.web.json` 增加 Monaco 子路径类型映射，供 `typeof import('monaco-editor/editor/editor.api')` 与 Worker 导入使用。
+
+**影响**：语言语法 chunk 由 84 个降至 32 个，入口 JS 由 1800.76 kB 降至 233.99 kB，`WorkspaceView` 由 2303.21 kB 降至 80.02 kB，入口 CSS 由约 377 kB 降至 98.46 kB。Monaco 核心（`editor.api` 约 5.05 MB 与 Monaco 入口 chunk 约 2.17 MB）仍会在首次打开文件时一次性加载，但不再阻塞工作区首屏；Diff 审核首次打开同样有短暂加载延迟，由 Suspense 骨架覆盖。冷门语言仅以纯文本显示。语言支持变更时需同步维护 `services/monaco.ts`、`utils/language.ts` 与 `utils/markdown.ts` 的注册列表。

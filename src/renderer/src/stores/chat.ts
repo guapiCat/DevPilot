@@ -218,6 +218,10 @@ export const useChatStore = defineStore('chat', () => {
     errorMessage.value = message
   }
 
+  function clearError(): void {
+    errorMessage.value = null
+  }
+
   async function refreshConversations(): Promise<void> {
     try {
       conversations.value = await desktopApi.chat.listConversations()
@@ -436,6 +440,7 @@ export const useChatStore = defineStore('chat', () => {
     isGeneratingInActiveConversation,
     canRetry,
     setError,
+    clearError,
     initialize,
     loadAiConfig,
     refreshConversations,

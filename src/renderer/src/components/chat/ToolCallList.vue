@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ToolCallRecord, ToolCallStatus } from '@shared/types/tool'
 
 const props = defineProps<{
@@ -49,13 +49,19 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
+
+const expanded = ref(false)
+
+function handleToggle(event: Event): void {
+  expanded.value = (event.target as HTMLDetailsElement).open
+}
 </script>
 
 <template>
-  <details class="tool-call-list">
+  <details class="tool-call-list" @toggle="handleToggle">
     <summary>
       <span class="summary-text">{{ summaryText }}</span>
-      <span class="summary-hint">展开详情</span>
+      <span class="summary-hint">{{ expanded ? '收起详情' : '展开详情' }}</span>
     </summary>
 
     <ul class="calls">

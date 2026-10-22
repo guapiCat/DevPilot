@@ -34,22 +34,7 @@ const chat = useChatStore()
 const edits = useEditStore()
 const { diffPanelVisible } = storeToRefs(workspace)
 const { activeConversationId } = storeToRefs(chat)
-const { totalCount } = storeToRefs(edits)
-
-type PanelMode = 'proposals' | 'git'
-const mode = ref<PanelMode>(edits.totalCount > 0 ? 'proposals' : 'git')
-
-watch(totalCount, (count, previous) => {
-  if (count > 0 && previous === 0) mode.value = 'proposals'
-})
-
-watch(
-  activeConversationId,
-  (conversationId) => {
-    void edits.loadPending(conversationId)
-  },
-  { immediate: true }
-)
+const { sessions, loading, totalCount } = storeToRefs(edits)
 const {
   activeRepository,
   gitStatus,
@@ -61,6 +46,37 @@ const {
   gitDiffError,
   gitChangeCount
 } = storeToRefs(repository)
+
+type PanelMode = 'proposals' | 'git'
+
+const visibleTotalCount = computed(() =>
+  activeRepository.value
+    ? sessions.value.reduce(
+        (sum, session) =>
+          session.repositoryId === activeRepository.value?.id ? sum + session.files.length : sum,
+        0
+      )
+    : totalCount.value
+)
+
+const mode = ref<PanelMode>(visibleTotalCount.value > 0 ? 'proposals' : 'git')
+
+watch(visibleTotalCount, (count, previous) => {
+  if (count > 0 && previous === 0) mode.value = 'proposals'
+  else if (count === 0 && previous > 0 && mode.value === 'proposals') mode.value = 'git'
+})
+
+watch(
+  activeConversationId,
+  (conversationId) => {
+    void edits.loadPending(conversationId)
+  },
+  { immediate: true }
+)
+
+watch(diffPanelVisible, (visible) => {
+  if (visible) void edits.loadPending(activeConversationId.value)
+})
 
 const changes = computed(() => gitStatus.value?.changes ?? [])
 
@@ -147,7 +163,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             @click="mode = 'proposals'"
           >
             AI 建议
-            <span v-if="totalCount > 0" class="tab-count">{{ totalCount }}</span>
+            <span v-if="visibleTotalCount > 0" class="tab-count">{{ visibleTotalCount }}</span>
           </button>
           <button
             type="button"
@@ -169,7 +185,7 @@ function handleApplied(payload: AppliedFileEdit): void {
         <el-button
           text
           size="small"
-          :loading="mode === 'git' ? gitStatusLoading : false"
+          :loading="mode === 'git' ? gitStatusLoading : loading"
           :disabled="mode === 'git' && !activeRepository?.isGitRepository"
           :title="mode === 'proposals' ? '刷新修改建议' : '刷新 Git 状态'"
           @click="refresh"
@@ -299,9 +315,9 @@ function handleApplied(payload: AppliedFileEdit): void {
 <style scoped>
 .diff-panel {
   display: flex;
-  flex: 0 0 320px;
+  flex: 0 0 auto;
   flex-direction: column;
-  height: 320px;
+  height: clamp(220px, 36vh, 320px);
   border-top: 1px solid var(--dp-border);
   background: var(--dp-bg-panel);
 }

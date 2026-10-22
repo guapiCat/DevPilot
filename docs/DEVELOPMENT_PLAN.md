@@ -140,6 +140,39 @@
 - `npm test`：29 个测试文件、296 个用例通过（2 个“缺少 ripgrep”用例跳过）；阶段 6 新增 `EditService`（唯一匹配、创建冲突、文件上限、重复路径、应用成功、哈希过期、逐项结束会话、拒绝）、`propose_file_edit` 参数组合与事件、`ChatService` 的 `edit_proposed` 事件顺序，并更新系统提示词断言。
 - 未覆盖：真实 DeepSeek 端到端修改建议依赖本地 Key 与额度；工作区 Diff 面板的人工验收随阶段 7 最终验收清单执行。
 
+## 渲染层体验与体积优化（阶段 7 前，已完成）
+
+- [x] Monaco 自定义入口与语言裁剪（84 → 32 个语法 chunk），首次打开文件时按需加载。
+- [x] Element Plus 手动按需注册，移除全量 JS 与全量 CSS。
+- [x] highlight.js 改为 `lib/core` + 显式注册 28 种常用语言。
+- [x] AI 建议计数按当前仓库过滤；展开面板自动刷新；刷新/错误时保留既有列表。
+- [x] 对话自动滚动（仅用户接近底部时）、错误提示可关闭、生成中提示、工具卡展开/收起文案。
+- [x] Ctrl+S 仅在编辑器与页面级触发，不拦截对话输入框。
+- [x] 主题对比度提升与 1080px 窄窗口布局调整。
+
+实现要点：
+
+- `services/monaco.ts` 以 `editor.api` 为核心自建入口，复制 `editor.main.js` 中除语言定义外的贡献注册，仅保留 32 种常用语言；codicon CSS 通过 `electron.vite.config.ts` 中的精确别名解析。`EditorArea` 首次打开文件时才动态导入 Monaco，AI 建议的 Diff 视图通过 `defineAsyncComponent` + `<Suspense>` 懒加载。
+- `main.ts` 只注册实际使用的 Element Plus 组件与对应样式，语言包由 `App.vue` 的 `el-config-provider` 提供。
+- `utils/markdown.ts` 使用 `highlight.js/lib/core` 注册 28 种语言，未注册语言回退为转义纯文本。
+- AI 建议面板新增按当前仓库过滤的计数、展开时刷新、刷新中的轻量提示；计数归零时自动回到 Git 标签。“去审核”会先刷新待审核列表再选中首项。
+- 对话列表仅在用户接近底部时自动滚动，发送新消息时强制滚到底部；消息容器增加 `role="log"` 与 `aria-live`。
+
+构建对比（electron-vite 产物，未压缩大小）：
+
+| 项目            | 优化前           | 优化后                                                              |
+| --------------- | ---------------- | ------------------------------------------------------------------- |
+| 入口 `index` JS | 1800.76 kB       | 233.99 kB                                                           |
+| `WorkspaceView` | 2303.21 kB       | 80.02 kB                                                            |
+| 入口 CSS        | 约 377 kB        | 98.46 kB                                                            |
+| 语言语法 chunk  | 84 个            | 32 个                                                               |
+| Monaco 核心     | 随工作区同步加载 | `editor.api` 5050.34 kB + 入口 chunk 2169.86 kB，首次打开文件时加载 |
+
+验证结果：
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test`（29 个测试文件、296 个用例通过、2 个跳过）、`npm run build` 通过。
+- 未覆盖：真实 Electron 窗口内的完整人工验收随阶段 7 最终验收清单执行。
+
 ## 阶段 7：稳定性与交付
 
 - [ ] 补齐单元与集成测试。

@@ -31,13 +31,15 @@ const {
 } = storeToRefs(chat)
 const { totalCount } = storeToRefs(edits)
 
-function goReview(): void {
+async function goReview(): Promise<void> {
   workspace.diffPanelVisible = true
-  edits.selectFirst()
 
   if (route.name !== 'workspace') {
     void router.push({ name: 'workspace' })
   }
+
+  await edits.loadPending(chat.activeConversationId)
+  edits.selectFirst()
 }
 
 function handleSend(content: string): void {
@@ -98,7 +100,7 @@ function handleRetry(): void {
       :title="errorMessage"
       type="error"
       show-icon
-      :closable="false"
+      @close="chat.clearError()"
     />
 
     <ChatComposer

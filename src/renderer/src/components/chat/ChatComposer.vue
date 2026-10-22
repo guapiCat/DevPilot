@@ -39,7 +39,13 @@ function submit(): void {
     />
     <div class="footer">
       <span class="hint">
-        {{ disabled ? disabledHint : 'Enter 发送 · Shift + Enter 换行' }}
+        {{
+          disabled
+            ? disabledHint
+            : generating
+              ? '正在生成，可先停止或等待'
+              : 'Enter 发送 · Shift + Enter 换行'
+        }}
       </span>
       <el-button v-if="generating" type="danger" plain @click="emit('cancel')">
         <el-icon><CircleClose /></el-icon>

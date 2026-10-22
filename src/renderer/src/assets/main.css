@@ -9,7 +9,7 @@
   --dp-border-strong: #c7d0dc;
   --dp-text: #1f2733;
   --dp-text-secondary: #5d6878;
-  --dp-text-muted: #7b8697;
+  --dp-text-muted: #66707f;
   --dp-accent: #2f6fe0;
   --dp-accent-soft: rgba(47, 111, 224, 0.1);
   --dp-accent-text: #2f6fe0;
@@ -91,7 +91,7 @@ html.dark {
   --dp-border-strong: #39404c;
   --dp-text: #e6e8eb;
   --dp-text-secondary: #9aa3b0;
-  --dp-text-muted: #697182;
+  --dp-text-muted: #8a93a2;
   --dp-accent: #4f8cff;
   --dp-accent-soft: rgba(79, 140, 255, 0.14);
   --dp-accent-text: #a6c4ff;

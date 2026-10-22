@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 import { desktopApi, DesktopApiError } from '@renderer/services/desktop-api'
-import { monaco } from '@renderer/services/monaco'
+import type * as Monaco from 'monaco-editor'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import { useThemeStore } from '@renderer/stores/theme'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
@@ -18,8 +18,18 @@ const theme = useThemeStore()
 const { activeRepository } = storeToRefs(repository)
 const monacoTheme = computed(() => (theme.mode === 'dark' ? 'devpilot-dark' : 'devpilot-light'))
 
+type MonacoApi = typeof import('monaco-editor/editor/editor.api')
+let monacoApi: MonacoApi | null = null
+
+async function loadMonaco(): Promise<MonacoApi> {
+  if (!monacoApi) {
+    monacoApi = (await import('@renderer/services/monaco')).monaco
+  }
+  return monacoApi
+}
+
 watch(monacoTheme, (value) => {
-  monaco.editor.setTheme(value)
+  monacoApi?.editor.setTheme(value)
 })
 const {
   openTabs,
@@ -32,8 +42,8 @@ const {
 } = storeToRefs(workspace)
 
 const editorHost = ref<HTMLDivElement | null>(null)
-let editor: monaco.editor.IStandaloneCodeEditor | null = null
-const models = new Map<string, monaco.editor.ITextModel>()
+let editor: Monaco.editor.IStandaloneCodeEditor | null = null
+const models = new Map<string, Monaco.editor.ITextModel>()
 
 const activeContent = computed(() => {
   const path = activeFilePath.value
@@ -69,14 +79,14 @@ function fileName(relativePath: string): string {
   return relativePath.split('/').pop() ?? relativePath
 }
 
-function toModelUri(relativePath: string): monaco.Uri {
+function toModelUri(api: MonacoApi, relativePath: string): Monaco.Uri {
   const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/')
-  return monaco.Uri.parse(`devpilot://repository/${encodedPath}`)
+  return api.Uri.parse(`devpilot://repository/${encodedPath}`)
 }
 
-function ensureEditor(): monaco.editor.IStandaloneCodeEditor | null {
+function ensureEditor(api: MonacoApi): Monaco.editor.IStandaloneCodeEditor | null {
   if (!editor && editorHost.value) {
-    editor = monaco.editor.create(editorHost.value, {
+    editor = api.editor.create(editorHost.value, {
       readOnly: false,
       automaticLayout: true,
       theme: monacoTheme.value,
@@ -115,20 +125,21 @@ function syncActiveDirty(): void {
   workspace.setFileDirty(path, model.getValue() !== saved.content)
 }
 
-function syncActiveModel(): void {
+async function syncActiveModel(): Promise<void> {
   const path = activeFilePath.value
   const content = activeContent.value
   if (!path || !content) return
 
-  const currentEditor = ensureEditor()
+  const api = await loadMonaco()
+  const currentEditor = ensureEditor(api)
   if (!currentEditor) return
 
   let model = models.get(path)
   if (!model || model.isDisposed()) {
-    const uri = toModelUri(path)
+    const uri = toModelUri(api, path)
     model =
-      monaco.editor.getModel(uri) ??
-      monaco.editor.createModel(content.content, getMonacoLanguage(path), uri)
+      api.editor.getModel(uri) ??
+      api.editor.createModel(content.content, getMonacoLanguage(path), uri)
     models.set(path, model)
   }
 
@@ -163,7 +174,7 @@ async function reloadFile(relativePath: string): Promise<void> {
     models.delete(relativePath)
     workspace.setFileContent(relativePath, content)
     await nextTick()
-    syncActiveModel()
+    await syncActiveModel()
   } catch (error) {
     ElMessage.error(toErrorMessage(error))
   }
@@ -248,6 +259,13 @@ async function requestCloseTab(relativePath: string): Promise<void> {
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
 
+  const target = event.target instanceof HTMLElement ? event.target : null
+  const isEditable = Boolean(
+    target?.closest('input, textarea, [contenteditable="true"]') &&
+    !target.closest('.monaco-editor')
+  )
+  if (isEditable) return
+
   event.preventDefault()
   void saveActiveFile()
 }
@@ -255,7 +273,9 @@ function handleGlobalKeydown(event: KeyboardEvent): void {
 watch(
   [activeFilePath, activeContent],
   () => {
-    void nextTick(() => syncActiveModel())
+    void nextTick(() => {
+      void syncActiveModel()
+    })
   },
   { flush: 'post' }
 )
@@ -277,7 +297,9 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, true)
-  void nextTick(() => syncActiveModel())
+  void nextTick(() => {
+    void syncActiveModel()
+  })
 })
 
 onBeforeUnmount(() => {
