@@ -1,0 +1,53 @@
+{
+  "name": "devpilot",
+  "productName": "DevPilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DevPilot - 面向研发工作的本地桌面智能助手",
+  "main": "./out/main/index.js",
+  "author": "DevPilot",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "lint": "eslint --cache .",
+    "lint:fix": "eslint --cache . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "install-electron"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.14.7",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.44",
+    "vue-router": "^4.6.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^3.0.1",
+    "@electron-toolkit/eslint-config-ts": "^4.0.0",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "^24.19.2",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "electron": "^44.7.2",
+    "electron-vite": "^6.0.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.13"
+  }
+}

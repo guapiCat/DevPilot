@@ -1,0 +1,7 @@
+out
+dist
+node_modules
+docs/TECHNICAL_DESIGN.md
+package-lock.json
+tsconfig.json
+tsconfig.*.json

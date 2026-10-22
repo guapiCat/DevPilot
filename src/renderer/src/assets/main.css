@@ -1,0 +1,116 @@
+:root {
+  color-scheme: dark;
+  --dp-bg-app: #15171c;
+  --dp-bg-sidebar: #191c22;
+  --dp-bg-panel: #1d2026;
+  --dp-bg-elevated: #232730;
+  --dp-bg-hover: #262b35;
+  --dp-border: #2c313b;
+  --dp-border-strong: #39404c;
+  --dp-text: #e6e8eb;
+  --dp-text-secondary: #9aa3b0;
+  --dp-text-muted: #697182;
+  --dp-accent: #4f8cff;
+  --dp-accent-soft: rgba(79, 140, 255, 0.14);
+  --dp-success: #3fb950;
+  --dp-warning: #d29922;
+  --dp-danger: #f85149;
+  --dp-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+html.dark {
+  --el-color-primary: var(--dp-accent);
+  --el-color-primary-light-3: #78a6ff;
+  --el-color-primary-light-5: #9cbfff;
+  --el-color-primary-light-7: #c0d6ff;
+  --el-color-primary-light-8: #d5e4ff;
+  --el-color-primary-light-9: #1f2d47;
+  --el-color-primary-dark-2: #3a70d6;
+  --el-bg-color: var(--dp-bg-panel);
+  --el-bg-color-page: var(--dp-bg-app);
+  --el-bg-color-overlay: var(--dp-bg-elevated);
+  --el-fill-color-blank: var(--dp-bg-panel);
+  --el-fill-color-light: var(--dp-bg-elevated);
+  --el-fill-color-lighter: var(--dp-bg-hover);
+  --el-fill-color-dark: #1a1d23;
+  --el-border-color: var(--dp-border);
+  --el-border-color-light: var(--dp-border);
+  --el-border-color-lighter: #262b34;
+  --el-border-color-extra-light: #22262e;
+  --el-text-color-primary: var(--dp-text);
+  --el-text-color-regular: #c4cad4;
+  --el-text-color-secondary: var(--dp-text-secondary);
+  --el-text-color-placeholder: var(--dp-text-muted);
+  --el-text-color-disabled: #555d6b;
+  --el-mask-color: rgba(10, 11, 14, 0.8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--dp-bg-app);
+  color: var(--dp-text);
+  font-family:
+    'Segoe UI',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#app {
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333945;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #414957;
+  background-clip: content-box;
+}
+
+::selection {
+  background: rgba(79, 140, 255, 0.35);
+}
+
+.el-button {
+  border-radius: 6px;
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: 8px;
+}
