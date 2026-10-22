@@ -1,7 +1,13 @@
 import type { AiConfigStatus, AppInfo } from '@shared/types/app'
 import type { PingResponse } from '@shared/types/api'
+import type { GitDiffResult, GitStatus } from '@shared/types/git'
 import type { ErrorCode, IpcErrorPayload, IpcResult } from '@shared/types/ipc'
-import type { FileContent, FileTreeResult, RepositorySummary } from '@shared/types/repository'
+import type {
+  FileContent,
+  FileTreeResult,
+  FileWriteResult,
+  RepositorySummary
+} from '@shared/types/repository'
 
 export class DesktopApiError extends Error {
   readonly code: ErrorCode
@@ -48,6 +54,24 @@ export const desktopApi = {
   file: {
     async read(repositoryId: string, relativePath: string): Promise<FileContent> {
       return unwrap(await window.devPilot.file.read(repositoryId, relativePath))
+    },
+    async write(
+      repositoryId: string,
+      relativePath: string,
+      content: string,
+      expectedHash: string
+    ): Promise<FileWriteResult> {
+      return unwrap(
+        await window.devPilot.file.write(repositoryId, relativePath, content, expectedHash)
+      )
+    }
+  },
+  git: {
+    async getStatus(repositoryId: string): Promise<GitStatus> {
+      return unwrap(await window.devPilot.git.status(repositoryId))
+    },
+    async getDiff(repositoryId: string, relativePath: string): Promise<GitDiffResult> {
+      return unwrap(await window.devPilot.git.diff(repositoryId, relativePath))
     }
   }
 }

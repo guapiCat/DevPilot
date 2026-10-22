@@ -23,7 +23,14 @@ const api: DevPilotApi = {
   },
   file: {
     read: (repositoryId, relativePath) =>
-      invoke(IPC_CHANNELS.fileRead, { repositoryId, relativePath })
+      invoke(IPC_CHANNELS.fileRead, { repositoryId, relativePath }),
+    write: (repositoryId, relativePath, content, expectedHash) =>
+      invoke(IPC_CHANNELS.fileWrite, { repositoryId, relativePath, content, expectedHash })
+  },
+  git: {
+    status: (repositoryId) => invoke(IPC_CHANNELS.gitStatus, { repositoryId }),
+    diff: (repositoryId, relativePath) =>
+      invoke(IPC_CHANNELS.gitDiff, { repositoryId, relativePath })
   }
 }
 

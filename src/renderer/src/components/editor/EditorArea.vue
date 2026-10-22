@@ -1,13 +1,32 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Close, Document } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
+import { desktopApi, DesktopApiError } from '@renderer/services/desktop-api'
+import { monaco } from '@renderer/services/monaco'
+import { useRepositoryStore } from '@renderer/stores/repository'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
+import { toErrorMessage } from '@renderer/utils/errors'
+import { getMonacoLanguage } from '@renderer/utils/language'
 
 const workspace = useWorkspaceStore()
-const { openTabs, activeFilePath, fileContents, fileErrors, fileLoadingPath } =
-  storeToRefs(workspace)
+const repository = useRepositoryStore()
+const { activeRepository } = storeToRefs(repository)
+const {
+  openTabs,
+  activeFilePath,
+  fileContents,
+  fileErrors,
+  fileDirty,
+  fileSavingPath,
+  fileLoadingPath
+} = storeToRefs(workspace)
+
+const editorHost = ref<HTMLDivElement | null>(null)
+let editor: monaco.editor.IStandaloneCodeEditor | null = null
+const models = new Map<string, monaco.editor.ITextModel>()
 
 const activeContent = computed(() => {
   const path = activeFilePath.value
@@ -23,17 +42,246 @@ const isLoading = computed(
   () => Boolean(activeFilePath.value) && fileLoadingPath.value === activeFilePath.value
 )
 
-const lineNumbers = computed(() => {
-  if (!activeContent.value) return ''
-  const lineCount = activeContent.value.content.split('\n').length
-  return Array.from({ length: lineCount }, (_, index) => index + 1).join('\n')
-})
+const isDirty = computed(
+  () => Boolean(activeFilePath.value) && Boolean(fileDirty.value[activeFilePath.value!])
+)
+
+const isSaving = computed(
+  () => Boolean(activeFilePath.value) && fileSavingPath.value === activeFilePath.value
+)
+
+const canSave = computed(() => isDirty.value && !isSaving.value)
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
+
+function fileName(relativePath: string): string {
+  return relativePath.split('/').pop() ?? relativePath
+}
+
+function toModelUri(relativePath: string): monaco.Uri {
+  const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/')
+  return monaco.Uri.parse(`devpilot://repository/${encodedPath}`)
+}
+
+function ensureEditor(): monaco.editor.IStandaloneCodeEditor | null {
+  if (!editor && editorHost.value) {
+    editor = monaco.editor.create(editorHost.value, {
+      readOnly: false,
+      automaticLayout: true,
+      theme: 'devpilot-dark',
+      minimap: { enabled: false },
+      fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace",
+      fontSize: 12.5,
+      lineHeight: 20,
+      padding: { top: 12, bottom: 12 },
+      scrollBeyondLastLine: false,
+      renderLineHighlight: 'none',
+      glyphMargin: false,
+      lineNumbersMinChars: 3,
+      overviewRulerLanes: 0,
+      overviewRulerBorder: false,
+      hideCursorInOverviewRuler: true,
+      contextmenu: false,
+      scrollbar: {
+        verticalScrollbarSize: 10,
+        horizontalScrollbarSize: 10,
+        useShadows: false
+      }
+    })
+
+    editor.onDidChangeModelContent(() => syncActiveDirty())
+  }
+
+  return editor
+}
+
+function syncActiveDirty(): void {
+  const path = activeFilePath.value
+  const saved = path ? fileContents.value[path] : null
+  const model = path ? models.get(path) : null
+  if (!path || !saved || !model || model.isDisposed()) return
+
+  workspace.setFileDirty(path, model.getValue() !== saved.content)
+}
+
+function syncActiveModel(): void {
+  const path = activeFilePath.value
+  const content = activeContent.value
+  if (!path || !content) return
+
+  const currentEditor = ensureEditor()
+  if (!currentEditor) return
+
+  let model = models.get(path)
+  if (!model || model.isDisposed()) {
+    const uri = toModelUri(path)
+    model =
+      monaco.editor.getModel(uri) ??
+      monaco.editor.createModel(content.content, getMonacoLanguage(path), uri)
+    models.set(path, model)
+  }
+
+  // 未保存的编辑不会被磁盘内容覆盖；重新加载会先释放模型。
+  if (!fileDirty.value[path] && model.getValue() !== content.content) {
+    model.setValue(content.content)
+  }
+
+  if (currentEditor.getModel() !== model) {
+    currentEditor.setModel(model)
+  }
+
+  syncActiveDirty()
+}
+
+function disposeModels(remainingPaths: readonly string[]): void {
+  for (const [path, model] of models) {
+    if (!remainingPaths.includes(path)) {
+      model.dispose()
+      models.delete(path)
+    }
+  }
+}
+
+async function reloadFile(relativePath: string): Promise<void> {
+  const currentRepository = activeRepository.value
+  if (!currentRepository) return
+
+  try {
+    const content = await desktopApi.file.read(currentRepository.id, relativePath)
+    models.get(relativePath)?.dispose()
+    models.delete(relativePath)
+    workspace.setFileContent(relativePath, content)
+    await nextTick()
+    syncActiveModel()
+  } catch (error) {
+    ElMessage.error(toErrorMessage(error))
+  }
+}
+
+async function handleFileConflict(relativePath: string): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      '该文件已在磁盘上被外部修改。重新加载将丢弃当前未保存的修改。',
+      '文件已被外部修改',
+      {
+        confirmButtonText: '重新加载',
+        cancelButtonText: '保留我的修改',
+        type: 'warning',
+        distinguishCancelAndClose: false
+      }
+    )
+  } catch {
+    return
+  }
+
+  await reloadFile(relativePath)
+}
+
+async function saveActiveFile(): Promise<void> {
+  const path = activeFilePath.value
+  const currentRepository = activeRepository.value
+  if (!path || !currentRepository || fileSavingPath.value) return
+
+  const saved = fileContents.value[path]
+  const model = models.get(path)
+  if (!saved || !model || model.isDisposed()) return
+
+  const value = model.getValue()
+  if (value === saved.content) {
+    workspace.setFileDirty(path, false)
+    return
+  }
+
+  workspace.setFileSavingPath(path)
+
+  try {
+    const result = await desktopApi.file.write(currentRepository.id, path, value, saved.hash)
+    workspace.applySavedContent(path, value, result.hash, result.size, result.hadBom)
+    syncActiveDirty()
+    void repository.refreshGitStatus()
+    ElMessage.success({ message: `已保存 ${fileName(path)}`, duration: 1500 })
+  } catch (error) {
+    if (error instanceof DesktopApiError && error.code === 'FILE_CHANGED') {
+      if (workspace.fileSavingPath === path) workspace.setFileSavingPath(null)
+      await handleFileConflict(path)
+      return
+    }
+    ElMessage.error(toErrorMessage(error))
+  } finally {
+    if (workspace.fileSavingPath === path) {
+      workspace.setFileSavingPath(null)
+    }
+  }
+}
+
+async function requestCloseTab(relativePath: string): Promise<void> {
+  if (fileDirty.value[relativePath]) {
+    try {
+      await ElMessageBox.confirm(
+        `「${fileName(relativePath)}」有未保存的修改，关闭将丢失这些修改。`,
+        '关闭未保存的文件',
+        {
+          confirmButtonText: '关闭',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+    } catch {
+      return
+    }
+  }
+
+  workspace.closeTab(relativePath)
+}
+
+function handleGlobalKeydown(event: KeyboardEvent): void {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
+
+  event.preventDefault()
+  void saveActiveFile()
+}
+
+watch(
+  [activeFilePath, activeContent],
+  () => {
+    void nextTick(() => syncActiveModel())
+  },
+  { flush: 'post' }
+)
+
+watch(activeFilePath, (path) => {
+  if (!path) {
+    editor?.dispose()
+    editor = null
+  }
+})
+
+watch(
+  openTabs,
+  (tabs) => {
+    disposeModels(tabs)
+  },
+  { deep: true }
+)
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown, true)
+  void nextTick(() => syncActiveModel())
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown, true)
+  editor?.dispose()
+  editor = null
+  for (const model of models.values()) {
+    model.dispose()
+  }
+  models.clear()
+})
 </script>
 
 <template>
@@ -49,13 +297,14 @@ function formatSize(bytes: number): string {
       >
         <el-icon :size="14"><Document /></el-icon>
         <span class="tab-path">{{ tab }}</span>
+        <span v-if="fileDirty[tab]" class="tab-dirty" aria-label="未保存"></span>
         <span
           class="tab-close"
           role="button"
           tabindex="0"
           :aria-label="`关闭 ${tab}`"
-          @click.stop="workspace.closeTab(tab)"
-          @keydown.enter.stop="workspace.closeTab(tab)"
+          @click.stop="requestCloseTab(tab)"
+          @keydown.enter.stop="requestCloseTab(tab)"
         >
           <el-icon :size="12"><Close /></el-icon>
         </span>
@@ -67,32 +316,48 @@ function formatSize(bytes: number): string {
         v-if="!activeFilePath"
         :icon="Document"
         title="没有打开的文件"
-        description="从左侧文件树选择文件即可只读查看代码。"
-      />
-
-      <div v-else-if="activeError" class="editor-feedback">
-        <el-alert :title="activeError" type="error" show-icon :closable="false" />
-      </div>
-
-      <el-skeleton
-        v-else-if="isLoading || !activeContent"
-        class="editor-loading"
-        :rows="10"
-        animated
+        description="从左侧文件树选择文件即可查看并编辑代码，Ctrl+S 保存。"
       />
 
       <div v-else class="file-view">
         <div class="file-meta">
-          <span class="file-path">{{ activeContent.relativePath }}</span>
-          <span class="file-info">
-            {{ formatSize(activeContent.size) }} · UTF-8{{ activeContent.hadBom ? ' · BOM' : '' }} ·
-            只读
-          </span>
+          <span class="file-path">{{ activeFilePath }}</span>
+          <div class="file-meta-actions">
+            <span class="file-info">
+              <template v-if="activeContent">
+                {{ formatSize(activeContent.size) }} · UTF-8{{
+                  activeContent.hadBom ? ' · BOM' : ''
+                }}
+              </template>
+              <template v-else-if="!activeError">加载中…</template>
+              <template v-else>读取失败</template>
+            </span>
+            <span v-if="activeContent" class="file-state" :class="{ dirty: isDirty }">
+              {{ isDirty ? '未保存' : '已保存' }}
+            </span>
+            <el-button
+              v-if="activeContent"
+              size="small"
+              :disabled="!canSave"
+              :loading="isSaving"
+              title="保存到磁盘（Ctrl+S）"
+              @click="saveActiveFile"
+            >
+              保存
+            </el-button>
+          </div>
         </div>
 
-        <div class="code-scroll">
-          <pre class="line-numbers" aria-hidden="true">{{ lineNumbers }}</pre>
-          <pre class="code"><code>{{ activeContent.content }}</code></pre>
+        <div class="editor-stage">
+          <div ref="editorHost" class="editor-host" aria-label="代码编辑器"></div>
+
+          <div v-if="activeError" class="editor-overlay">
+            <el-alert :title="activeError" type="error" show-icon :closable="false" />
+          </div>
+
+          <div v-else-if="isLoading || !activeContent" class="editor-overlay">
+            <el-skeleton :rows="10" animated />
+          </div>
         </div>
       </div>
     </div>
@@ -148,6 +413,14 @@ function formatSize(bytes: number): string {
   white-space: nowrap;
 }
 
+.tab-dirty {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dp-accent);
+}
+
 .tab-close {
   display: grid;
   place-items: center;
@@ -167,11 +440,6 @@ function formatSize(bytes: number): string {
   min-height: 0;
 }
 
-.editor-feedback,
-.editor-loading {
-  padding: 18px;
-}
-
 .file-view {
   display: flex;
   flex: 1;
@@ -185,7 +453,7 @@ function formatSize(bytes: number): string {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 14px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--dp-border);
   background: var(--dp-bg-panel);
   color: var(--dp-text-muted);
@@ -198,50 +466,37 @@ function formatSize(bytes: number): string {
   white-space: nowrap;
 }
 
-.file-info {
-  flex: 0 0 auto;
-}
-
-.code-scroll {
+.file-meta-actions {
   display: flex;
-  flex: 1;
-  align-items: flex-start;
-  min-height: 0;
-  overflow: auto;
-  background: var(--dp-bg-app);
-}
-
-.line-numbers,
-.code {
-  padding-top: 12px;
-  padding-bottom: 12px;
-  margin: 0;
-  font-family: var(--dp-mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  tab-size: 2;
-}
-
-.line-numbers {
-  position: sticky;
-  left: 0;
   flex: 0 0 auto;
-  min-width: 52px;
-  padding-right: 12px;
-  padding-left: 12px;
-  border-right: 1px solid var(--dp-border);
-  background: var(--dp-bg-app);
-  color: var(--dp-text-muted);
-  text-align: right;
-  user-select: none;
-  white-space: pre;
+  align-items: center;
+  gap: 10px;
 }
 
-.code {
+.file-state {
+  color: var(--dp-text-muted);
+}
+
+.file-state.dirty {
+  color: #e6b34a;
+}
+
+.editor-stage {
+  position: relative;
   flex: 1;
-  min-width: max-content;
-  padding-right: 18px;
-  color: var(--dp-text);
-  white-space: pre;
+  min-height: 0;
+}
+
+.editor-host {
+  position: absolute;
+  inset: 0;
+}
+
+.editor-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 18px;
+  background: var(--dp-bg-app);
 }
 </style>

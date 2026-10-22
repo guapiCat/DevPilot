@@ -1,6 +1,7 @@
 import type { AiConfigStatus, AppInfo } from './app'
+import type { GitDiffResult, GitStatus } from './git'
 import type { IpcResult } from './ipc'
-import type { FileContent, FileTreeResult, RepositorySummary } from './repository'
+import type { FileContent, FileTreeResult, FileWriteResult, RepositorySummary } from './repository'
 
 export interface PingResponse {
   message: string
@@ -22,5 +23,15 @@ export interface DevPilotApi {
   }
   file: {
     read(repositoryId: string, relativePath: string): Promise<IpcResult<FileContent>>
+    write(
+      repositoryId: string,
+      relativePath: string,
+      content: string,
+      expectedHash: string
+    ): Promise<IpcResult<FileWriteResult>>
+  }
+  git: {
+    status(repositoryId: string): Promise<IpcResult<GitStatus>>
+    diff(repositoryId: string, relativePath: string): Promise<IpcResult<GitDiffResult>>
   }
 }

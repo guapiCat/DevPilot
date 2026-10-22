@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChatDotRound, DocumentCopy, FolderAdd, FolderOpened } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
+import { onBeforeRouteLeave } from 'vue-router'
 import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 import DiffPanel from '@renderer/components/diff/DiffPanel.vue'
@@ -15,12 +17,49 @@ import { toErrorMessage } from '@renderer/utils/errors'
 const repository = useRepositoryStore()
 const workspace = useWorkspaceStore()
 
-const { repositories, activeRepository, fileTree, fileTreeLoading, fileTreeTruncated } =
-  storeToRefs(repository)
+const {
+  repositories,
+  activeRepository,
+  fileTree,
+  fileTreeLoading,
+  fileTreeTruncated,
+  gitStatus,
+  gitChangeCount
+} = storeToRefs(repository)
 const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
 
 const selecting = ref(false)
 const selectError = ref<string | null>(null)
+const selectedRepositoryId = ref<string | undefined>(activeRepository.value?.id)
+
+watch(activeRepository, (repo) => {
+  selectedRepositoryId.value = repo?.id
+})
+
+async function confirmDiscardUnsaved(action: string): Promise<boolean> {
+  if (!workspace.hasDirtyFiles) return true
+
+  try {
+    await ElMessageBox.confirm(
+      `有未保存的文件修改，${action}将丢失这些修改。是否继续？`,
+      '未保存的修改',
+      {
+        confirmButtonText: '继续',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!workspace.hasDirtyFiles) return
+  event.preventDefault()
+  event.returnValue = ''
+}
 
 async function loadRepositoryTree(repositoryId: string): Promise<void> {
   repository.setFileTreeLoading(true)
@@ -47,11 +86,14 @@ async function handleSelectRepository(): Promise<void> {
   try {
     const summary = await desktopApi.repository.select()
     if (!summary) return
+    if (summary.id === activeRepository.value?.id) return
+    if (!(await confirmDiscardUnsaved('切换仓库'))) return
 
     workspace.resetRepositoryState()
     repository.setActiveRepository(summary)
     repository.setRepositories(await desktopApi.repository.list())
     await loadRepositoryTree(summary.id)
+    void repository.refreshGitStatus()
   } catch (error) {
     selectError.value = toErrorMessage(error)
   } finally {
@@ -65,10 +107,16 @@ async function handleSwitchRepository(repositoryId: string): Promise<void> {
   const summary = repositories.value.find((item) => item.id === repositoryId)
   if (!summary) return
 
+  if (!(await confirmDiscardUnsaved('切换仓库'))) {
+    selectedRepositoryId.value = activeRepository.value?.id
+    return
+  }
+
   selectError.value = null
   workspace.resetRepositoryState()
   repository.setActiveRepository(summary)
   await loadRepositoryTree(summary.id)
+  void repository.refreshGitStatus()
 }
 
 async function handleOpenFile(relativePath: string): Promise<void> {
@@ -93,14 +141,30 @@ async function handleOpenFile(relativePath: string): Promise<void> {
   }
 }
 
+onBeforeRouteLeave(async () => {
+  if (!workspace.hasDirtyFiles) return true
+  if (!(await confirmDiscardUnsaved('离开工作区'))) return false
+
+  workspace.resetRepositoryState()
+  return true
+})
+
 onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
   void (async () => {
     try {
       repository.setRepositories(await desktopApi.repository.list())
+      if (activeRepository.value) {
+        void repository.refreshGitStatus()
+      }
     } catch (error) {
       selectError.value = toErrorMessage(error)
     }
   })()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -110,6 +174,12 @@ onMounted(() => {
       <div class="repo-badge" :title="activeRepository?.path">
         <el-icon :size="15"><FolderOpened /></el-icon>
         <span>{{ activeRepository?.name ?? '未选择仓库' }}</span>
+        <template v-if="activeRepository?.isGitRepository">
+          <span class="git-branch" title="当前分支">{{ gitStatus?.branch ?? 'HEAD' }}</span>
+          <span v-if="gitChangeCount > 0" class="git-change-count">
+            {{ gitChangeCount }} 个变更
+          </span>
+        </template>
         <el-tag
           v-if="activeRepository && !activeRepository.isGitRepository"
           size="small"
@@ -122,9 +192,9 @@ onMounted(() => {
 
       <el-select
         v-if="repositories.length > 0"
+        v-model="selectedRepositoryId"
         class="repo-switcher"
         size="small"
-        :model-value="activeRepository?.id"
         placeholder="切换仓库"
         @change="handleSwitchRepository"
       >
@@ -219,7 +289,7 @@ onMounted(() => {
         </aside>
       </div>
 
-      <DiffPanel />
+      <DiffPanel @open="handleOpenFile" />
     </div>
   </div>
 </template>
@@ -252,6 +322,23 @@ onMounted(() => {
   background: var(--dp-bg-elevated);
   color: var(--dp-text-secondary);
   font-size: 12.5px;
+}
+
+.git-branch {
+  max-width: 130px;
+  overflow: hidden;
+  padding: 1px 7px;
+  border: 1px solid var(--dp-border);
+  border-radius: 999px;
+  color: #a6c4ff;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-change-count {
+  color: var(--dp-text-muted);
+  font-size: 10.5px;
 }
 
 .repo-switcher {

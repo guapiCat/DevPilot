@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { join } from 'node:path'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc'
@@ -38,6 +38,26 @@ function createWindow(): void {
 
   mainWindow.webContents.on('will-navigate', (event) => {
     event.preventDefault()
+  })
+
+  // Renderer 在存在未保存修改时会阻止卸载，这里用原生对话框确认是否放弃修改。
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    if (!mainWindow) return
+
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      title: '未保存的修改',
+      message: '有未保存的文件修改',
+      detail: '退出应用将丢失这些修改。是否仍要退出？',
+      buttons: ['退出', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    })
+
+    if (choice === 0) {
+      event.preventDefault()
+    }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {

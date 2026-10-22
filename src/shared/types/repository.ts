@@ -27,4 +27,13 @@ export interface FileContent {
   size: number
   encoding: 'utf-8'
   hadBom: boolean
+  hash: string
+}
+
+export interface FileWriteResult {
+  repositoryId: string
+  relativePath: string
+  size: number
+  hadBom: boolean
+  hash: string
 }

@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { FileContent } from '@shared/types/repository'
 
@@ -10,7 +10,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const selectedEditProposalId = ref<string | null>(null)
   const fileContents = ref<Record<string, FileContent>>({})
   const fileErrors = ref<Record<string, string>>({})
+  const fileDirty = ref<Record<string, boolean>>({})
+  const fileSavingPath = ref<string | null>(null)
   const fileLoadingPath = ref<string | null>(null)
+  const hasDirtyFiles = computed(() => openTabs.value.some((path) => fileDirty.value[path]))
 
   function openFile(relativePath: string): void {
     if (!openTabs.value.includes(relativePath)) {
@@ -24,6 +27,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (index === -1) return
 
     openTabs.value.splice(index, 1)
+    delete fileDirty.value[relativePath]
 
     if (activeFilePath.value === relativePath) {
       activeFilePath.value = openTabs.value[Math.max(0, index - 1)] ?? null
@@ -45,14 +49,42 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function setFileContent(relativePath: string, content: FileContent): void {
     fileContents.value[relativePath] = content
     delete fileErrors.value[relativePath]
+    delete fileDirty.value[relativePath]
   }
 
   function setFileError(relativePath: string, message: string): void {
     fileErrors.value[relativePath] = message
   }
 
+  function setFileDirty(relativePath: string, dirty: boolean): void {
+    if (dirty) {
+      fileDirty.value[relativePath] = true
+    } else {
+      delete fileDirty.value[relativePath]
+    }
+  }
+
   function setFileLoadingPath(relativePath: string | null): void {
     fileLoadingPath.value = relativePath
+  }
+
+  function setFileSavingPath(relativePath: string | null): void {
+    fileSavingPath.value = relativePath
+  }
+
+  function applySavedContent(
+    relativePath: string,
+    content: string,
+    hash: string,
+    size: number,
+    hadBom: boolean
+  ): void {
+    const existing = fileContents.value[relativePath]
+    if (!existing) return
+
+    fileContents.value[relativePath] = { ...existing, content, hash, size, hadBom }
+    delete fileDirty.value[relativePath]
+    delete fileErrors.value[relativePath]
   }
 
   function resetRepositoryState(): void {
@@ -60,6 +92,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     activeFilePath.value = null
     fileContents.value = {}
     fileErrors.value = {}
+    fileDirty.value = {}
+    fileSavingPath.value = null
     fileLoadingPath.value = null
   }
 
@@ -71,7 +105,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedEditProposalId,
     fileContents,
     fileErrors,
+    fileDirty,
+    fileSavingPath,
     fileLoadingPath,
+    hasDirtyFiles,
     openFile,
     closeTab,
     toggleRightPanel,
@@ -79,7 +116,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectEditProposal,
     setFileContent,
     setFileError,
+    setFileDirty,
     setFileLoadingPath,
+    setFileSavingPath,
+    applySavedContent,
     resetRepositoryState
   }
 })

@@ -144,6 +144,14 @@ export class RepositoryService {
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
   }
 
+  getRealRoot(repositoryId: string): string {
+    const entry = this.registry.get(repositoryId)
+    if (!entry) {
+      throw new ServiceError('REPOSITORY_NOT_FOUND', '仓库不存在或尚未登记')
+    }
+    return entry.realRoot
+  }
+
   async getTree(repositoryId: string): Promise<FileTreeResult> {
     const entry = this.registry.get(repositoryId)
     if (!entry) {

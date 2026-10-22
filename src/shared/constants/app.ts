@@ -6,10 +6,16 @@ export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 export const MAX_PING_MESSAGE_LENGTH = 200
 
 export const MAX_FILE_READ_BYTES = 1024 * 1024
+export const MAX_FILE_WRITE_BYTES = 1024 * 1024
 export const MAX_FILE_TREE_ENTRIES = 5000
 export const MAX_FILE_TREE_DEPTH = 32
 export const MAX_RELATIVE_PATH_LENGTH = 4096
 export const BINARY_SNIFF_BYTES = 8000
+
+export const GIT_COMMAND_TIMEOUT_MS = 10_000
+export const MAX_GIT_OUTPUT_BYTES = 5 * 1024 * 1024
+export const MAX_GIT_DIFF_BYTES = 512 * 1024
+export const MAX_GIT_STATUS_ENTRIES = 2000
 
 export const IGNORED_DIRECTORY_NAMES = ['.git', 'node_modules'] as const
 
@@ -26,5 +32,8 @@ export const IPC_CHANNELS = {
   repositorySelect: 'repository:select',
   repositoryList: 'repository:list',
   repositoryGetTree: 'repository:get-tree',
-  fileRead: 'file:read'
+  fileRead: 'file:read',
+  fileWrite: 'file:write',
+  gitStatus: 'git:status',
+  gitDiff: 'git:diff'
 } as const
