@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Promotion } from '@element-plus/icons-vue'
+import { CircleClose, Promotion } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   disabled?: boolean
   disabledHint?: string
+  generating?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [content: string]
+  cancel: []
 }>()
 
 const content = ref('')
 
 function submit(): void {
-  if (props.disabled) return
+  if (props.disabled || props.generating) return
 
   const value = content.value.trim()
   if (!value) return
@@ -31,6 +33,7 @@ function submit(): void {
       type="textarea"
       :rows="3"
       resize="none"
+      :disabled="disabled"
       placeholder="描述你的研发问题，例如：登录流程的令牌刷新逻辑在哪里？"
       @keydown.enter.exact.prevent="submit"
     />
@@ -38,7 +41,11 @@ function submit(): void {
       <span class="hint">
         {{ disabled ? disabledHint : 'Enter 发送 · Shift + Enter 换行' }}
       </span>
-      <el-button type="primary" :disabled="disabled || !content.trim()" @click="submit">
+      <el-button v-if="generating" type="danger" plain @click="emit('cancel')">
+        <el-icon><CircleClose /></el-icon>
+        <span>停止</span>
+      </el-button>
+      <el-button v-else type="primary" :disabled="disabled || !content.trim()" @click="submit">
         <el-icon><Promotion /></el-icon>
         <span>发送</span>
       </el-button>

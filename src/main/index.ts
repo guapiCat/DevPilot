@@ -1,9 +1,11 @@
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { join } from 'node:path'
 import icon from '../../resources/icon.png?asset'
+import { ChatStore } from './database/chat.store'
 import { openDatabase } from './database/database'
 import { RepositoryStore } from './database/repository.store'
 import { registerIpcHandlers } from './ipc'
+import { chatService } from './services/chat.service'
 import { repositoryService } from './services/repository.service'
 import { loadEnvFiles } from './utils/env'
 
@@ -94,6 +96,7 @@ if (!hasSingleInstanceLock) {
     try {
       database = openDatabase(app.getPath('userData'))
       repositoryService.initialize(new RepositoryStore(database))
+      chatService.initialize(new ChatStore(database))
       console.info('[db] SQLite 已就绪')
     } catch {
       database = null
@@ -115,6 +118,7 @@ if (!hasSingleInstanceLock) {
   })
 
   app.on('will-quit', () => {
+    chatService.cancelAll()
     database?.close()
     database = null
   })

@@ -7,9 +7,14 @@ withDefaults(
   defineProps<{
     messages: ChatMessage[]
     generating?: boolean
+    retryable?: boolean
   }>(),
-  { generating: false }
+  { generating: false, retryable: false }
 )
+
+const emit = defineEmits<{
+  retry: []
+}>()
 </script>
 
 <template>
@@ -18,9 +23,9 @@ withDefaults(
       v-if="messages.length === 0"
       :icon="ChatLineRound"
       title="开始一次研发对话"
-      description="AI 将读取你授权仓库中的代码来回答。任何文件修改都会先以 Diff 展示，只有你确认后才会写入本地文件。"
+      description="当前版本的 AI 只根据对话历史回答，不会读取或修改仓库文件；回答内容会发送到所配置的云端模型。"
     >
-      <div class="stage-note">当前为界面骨架 · 模型与工具接入将在阶段 4–6 完成</div>
+      <div class="stage-note">文件上下文与工具调用将在阶段 5 接入</div>
     </EmptyState>
 
     <template v-else>
@@ -30,9 +35,20 @@ withDefaults(
         class="message"
         :class="`role-${message.role}`"
       >
-        <header>{{ message.role === 'user' ? '你' : 'DevPilot' }}</header>
-        <p>{{ message.content }}</p>
+        <header>
+          <span>{{ message.role === 'user' ? '你' : 'DevPilot' }}</span>
+          <span v-if="message.status === 'cancelled'" class="status-tag">已停止</span>
+          <span v-else-if="message.status === 'error'" class="status-tag danger">生成失败</span>
+        </header>
+        <p v-if="message.content">{{ message.content }}</p>
+        <p v-else-if="message.status === 'cancelled'" class="placeholder-text">已停止生成</p>
+        <p v-else class="placeholder-text">正在等待回复…</p>
       </article>
+
+      <div v-if="retryable && !generating" class="retry-row">
+        <el-button size="small" @click="emit('retry')">重试上一条问题</el-button>
+      </div>
+
       <div v-if="generating" class="generating">
         <span class="dot"></span>
         <span class="dot"></span>
@@ -69,11 +85,40 @@ withDefaults(
 }
 
 .message header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
   color: var(--dp-text-muted);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+.status-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--dp-border);
+  border-radius: 999px;
+  color: var(--dp-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.status-tag.danger {
+  border-color: color-mix(in srgb, var(--dp-danger) 45%, transparent);
+  color: var(--dp-danger);
+}
+
+.placeholder-text {
+  color: var(--dp-text-muted);
+  font-style: italic;
+}
+
+.retry-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 28px 18px;
 }
 
 .message p {

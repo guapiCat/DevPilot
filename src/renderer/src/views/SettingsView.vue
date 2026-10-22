@@ -13,6 +13,10 @@ const pingLoading = ref(false)
 const pingResult = ref<string | null>(null)
 const pingError = ref<string | null>(null)
 
+const testLoading = ref(false)
+const testResult = ref<string | null>(null)
+const testError = ref<string | null>(null)
+
 async function loadSettings(): Promise<void> {
   loading.value = true
   loadError.value = null
@@ -43,6 +47,21 @@ async function testMainProcess(): Promise<void> {
     pingError.value = toErrorMessage(error)
   } finally {
     pingLoading.value = false
+  }
+}
+
+async function testAiConnection(): Promise<void> {
+  testLoading.value = true
+  testResult.value = null
+  testError.value = null
+
+  try {
+    const result = await desktopApi.settings.testConnection()
+    testResult.value = `连接成功 · ${result.model} · ${result.latencyMs} ms`
+  } catch (error) {
+    testError.value = toErrorMessage(error)
+  } finally {
+    testLoading.value = false
   }
 }
 
@@ -106,10 +125,25 @@ onMounted(() => {
 
             <div class="actions">
               <el-button size="small" :loading="loading" @click="loadSettings">重新检测</el-button>
-              <el-tooltip content="连接测试将在阶段 4 接通模型后提供" placement="top">
-                <span><el-button size="small" disabled>测试连接</el-button></span>
-              </el-tooltip>
+              <el-button
+                size="small"
+                :disabled="!config.configured"
+                :loading="testLoading"
+                @click="testAiConnection"
+              >
+                测试连接
+              </el-button>
+              <span v-if="testResult" class="inline-status ok">
+                <span class="dot"></span>{{ testResult }}
+              </span>
+              <span v-if="testError" class="inline-status danger">
+                <span class="dot"></span>{{ testError }}
+              </span>
             </div>
+
+            <p class="card-note">
+              连接测试会向模型发送一条最小请求（消耗少量额度），仅在点击时触发。
+            </p>
 
             <div class="hint-box">
               <p>
@@ -179,8 +213,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
           </dl>
 
           <p class="card-note">
-            对话、仓库与编辑会话数据将在阶段 3 起保存到该目录下的 SQLite 数据库。当前阶段仅使用 .env
-            配置。
+            仓库信息、对话与消息会保存在该目录下的 SQLite 数据库（devpilot.db）中；API Key 只从 .env
+            读取，不会写入数据库。
           </p>
         </section>
 
@@ -193,7 +227,10 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
           </header>
 
           <ul class="security-list">
-            <li>启用模型后，为回答代码问题，相关文件内容或搜索片段会发送到所配置的云端模型。</li>
+            <li>
+              当前版本的对话内容会发送到所配置的云端模型；阶段 5
+              起才会额外发送你授权仓库中的文件片段。
+            </li>
             <li>
               AI 对文件的修改只能生成提案，必须以 Diff 形式审核，并由你确认后才会写入磁盘（阶段
               6）。

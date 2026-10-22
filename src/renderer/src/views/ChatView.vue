@@ -1,25 +1,72 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import ChatComposer from '@renderer/components/chat/ChatComposer.vue'
 import ConversationList from '@renderer/components/chat/ConversationList.vue'
 import MessageList from '@renderer/components/chat/MessageList.vue'
+import { desktopApi } from '@renderer/services/desktop-api'
 import { useChatStore } from '@renderer/stores/chat'
 import { useRepositoryStore } from '@renderer/stores/repository'
+import { toErrorMessage } from '@renderer/utils/errors'
 
 const chat = useChatStore()
 const repository = useRepositoryStore()
 
-const { conversations, activeConversationId, activeMessages, isGenerating, errorMessage } =
-  storeToRefs(chat)
+const {
+  conversations,
+  activeConversationId,
+  activeMessages,
+  isGenerating,
+  isGeneratingInActiveConversation,
+  isCreatingConversation,
+  canRetry,
+  errorMessage
+} = storeToRefs(chat)
 const { activeRepository } = storeToRefs(repository)
 
-function handleCreate(): void {
-  chat.createConversation(activeRepository.value?.id ?? null)
+const aiConfigured = ref(true)
+const aiConfigLoading = ref(true)
+
+onMounted(async () => {
+  void chat.initialize()
+
+  try {
+    const status = await desktopApi.settings.getAiConfigStatus()
+    aiConfigured.value = status.configured
+  } catch (error) {
+    chat.setError(toErrorMessage(error))
+  } finally {
+    aiConfigLoading.value = false
+  }
+})
+
+async function handleCreate(): Promise<void> {
+  try {
+    await chat.createConversation(activeRepository.value?.id ?? null)
+  } catch (error) {
+    chat.setError(toErrorMessage(error))
+  }
 }
 
-function handleSelect(id: string): void {
-  chat.selectConversation(id)
+async function handleSelect(id: string): Promise<void> {
+  try {
+    await chat.selectConversation(id)
+  } catch (error) {
+    chat.setError(toErrorMessage(error))
+  }
+}
+
+function handleSend(content: string): void {
+  void chat.sendMessage(content, activeRepository.value?.id ?? null)
+}
+
+function handleCancel(): void {
+  void chat.cancelGeneration()
+}
+
+function handleRetry(): void {
+  void chat.retryLast()
 }
 </script>
 
@@ -28,7 +75,7 @@ function handleSelect(id: string): void {
     <header class="page-header">
       <div>
         <h1>研发对话</h1>
-        <p>围绕当前仓库的代码与变更进行讨论，回答会引用真实的文件上下文。</p>
+        <p>当前版本只依据对话历史回答，不会读取仓库文件；对话内容会发送到云端模型。</p>
       </div>
 
       <router-link class="repo-chip" :to="{ name: 'workspace' }">
@@ -41,12 +88,33 @@ function handleSelect(id: string): void {
       <ConversationList
         :conversations="conversations"
         :active-id="activeConversationId"
+        :creating="isCreatingConversation"
         @create="handleCreate"
         @select="handleSelect"
       />
 
       <section class="chat-main">
-        <MessageList :messages="activeMessages" :generating="isGenerating" />
+        <MessageList
+          :messages="activeMessages"
+          :generating="isGeneratingInActiveConversation"
+          :retryable="canRetry"
+          @retry="handleRetry"
+        />
+
+        <el-alert
+          v-if="!aiConfigLoading && !aiConfigured"
+          class="chat-error"
+          type="warning"
+          title="尚未配置 DeepSeek API Key"
+          show-icon
+          :closable="false"
+        >
+          <template #default>
+            请在
+            <router-link class="inline-link" :to="{ name: 'settings' }">设置页</router-link>
+            查看配置方式，并在修改 .env 后重启应用。
+          </template>
+        </el-alert>
 
         <el-alert
           v-if="errorMessage"
@@ -57,7 +125,13 @@ function handleSelect(id: string): void {
           :closable="false"
         />
 
-        <ChatComposer disabled disabled-hint="AI 模型接入将在阶段 4 完成，当前仅展示界面" />
+        <ChatComposer
+          :disabled="!aiConfigured"
+          disabled-hint="请先在设置页配置 DeepSeek API Key"
+          :generating="isGenerating"
+          @send="handleSend"
+          @cancel="handleCancel"
+        />
       </section>
     </div>
   </div>
@@ -132,5 +206,10 @@ function handleSelect(id: string): void {
 
 .chat-error {
   margin: 0 24px 10px;
+}
+
+.inline-link {
+  color: var(--dp-accent);
+  text-decoration: underline;
 }
 </style>

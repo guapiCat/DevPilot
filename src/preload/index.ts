@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/app'
 import type { DevPilotApi } from '@shared/types/api'
+import type { ChatEvent } from '@shared/types/chat'
 import type { IpcResult } from '@shared/types/ipc'
 
 // invoke 的返回值由主进程 handler 按 IpcResult 约定构造，这里是唯一的类型断言边界。
@@ -14,7 +16,22 @@ const api: DevPilotApi = {
     ping: (message) => invoke(IPC_CHANNELS.appPing, { message })
   },
   settings: {
-    getAiConfigStatus: () => invoke(IPC_CHANNELS.settingsGetAiConfig)
+    getAiConfigStatus: () => invoke(IPC_CHANNELS.settingsGetAiConfig),
+    testConnection: () => invoke(IPC_CHANNELS.settingsTestConnection)
+  },
+  chat: {
+    listConversations: () => invoke(IPC_CHANNELS.chatListConversations),
+    createConversation: (repositoryId) =>
+      invoke(IPC_CHANNELS.chatCreateConversation, { repositoryId }),
+    getMessages: (conversationId) => invoke(IPC_CHANNELS.chatGetMessages, { conversationId }),
+    send: (input) => invoke(IPC_CHANNELS.chatSend, input),
+    retry: (input) => invoke(IPC_CHANNELS.chatRetry, input),
+    cancel: (requestId) => invoke(IPC_CHANNELS.chatCancel, { requestId }),
+    onEvent: (listener) => {
+      const handler = (_event: IpcRendererEvent, payload: ChatEvent): void => listener(payload)
+      ipcRenderer.on(IPC_CHANNELS.chatEvent, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.chatEvent, handler)
+    }
   },
   repository: {
     select: () => invoke(IPC_CHANNELS.repositorySelect),

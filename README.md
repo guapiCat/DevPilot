@@ -2,16 +2,16 @@
 
 面向研发工作的 Windows 桌面智能助手。DevPilot 的目标是让开发者在本地代码仓库中通过 AI 理解代码、定位问题、提出修改，并在 Diff 审核确认后把修改应用到工作区。
 
-> 当前状态：**阶段 1–3 已完成：仓库选择与持久化、文件树、Monaco 编辑保存、只读 Git status/diff、SQLite 基础表**。
-> AI 对话、Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
+> 当前状态：**阶段 1–4 已完成：仓库浏览与编辑、Git 只读集成、SQLite 持久化、DeepSeek 流式对话**。
+> 代码工具调用、Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
 > 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准，数据库表结构见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
 
 ## 已实现
 
 - Electron + Vue 3 + TypeScript 分层工程（Main / Preload / Renderer / Shared）。
 - 安全窗口配置：`contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`。
-- 最小化 Preload API：`window.devPilot.app.*`、`window.devPilot.settings.*`，不暴露任意 IPC channel。
-- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询、仓库与文件读写，入参使用 Zod 校验。
+- 最小化 Preload API：`window.devPilot.app.*`、`window.devPilot.settings.*`、`window.devPilot.chat.*` 等具名能力，不暴露任意 IPC channel。
+- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询与连接测试、仓库与文件读写、对话与会话管理，入参使用 Zod 校验。
 - 本地仓库选择与切换：系统目录对话框，自动识别 Git 仓库。
 - SQLite 持久化：`better-sqlite3`（N-API 预编译）在 `userData` 下创建 `devpilot.db`；`user_version` 迁移管理 `repositories`、`conversations`、`messages`、`edit_sessions`、`file_edits` 基础表与外键/索引；仓库列表跨启动保留并自动恢复最近仓库。
 - 安全文件访问：仓库 ID + 相对路径，`realpath` 规范化，拦截路径穿越、绝对路径与符号链接逃逸。
@@ -21,6 +21,9 @@
 - 未保存修改保护：关闭标签、切换仓库、离开工作区与退出应用时提示放弃修改。
 - 只读 Git 集成：`git status --porcelain=v1 -z` 展示当前分支与工作区变更（含暂存、未跟踪、换名与冲突状态）；选择文件后展示相对 `HEAD` 的统一 Diff，未跟踪文件生成新增 Diff，未提交仓库以空树为基线；输出按 512 KB 截断，命令 10 秒超时、5 MB 上限。
 - Git 面板：状态栏展示分支与变更数，变更列表与 Diff 视图支持加载/空/错误状态，可直接在编辑器中打开变更文件；保存文件后自动刷新。
+- AI 对话（阶段 4）：DeepSeek 流式回答，支持停止生成、120 秒超时与错误重试；会话与消息写入 SQLite，重启后恢复；首条用户消息自动生成会话标题；历史按最近 20 条 / 24k 字符裁剪。
+- 模型接入边界：LangChain.js `@langchain/deepseek` 适配层统一文本归一化、用量与 HTTP 错误码映射；主进程全局单活动请求，`requestId` 防重放；取消或失败的部分文本不落库，避免污染后续上下文。
+- 对话安全提示：未配置 Key 时禁用输入并引导到设置页；界面明确提示对话内容会发送到云端模型；设置页提供最小请求的“连接测试”。
 - 全局导航与三个页面：研发对话、研发工作区（IDE 三栏布局）、设置。
 - Pinia Store：`repository`、`chat`、`workspace`，承载当前 UI 状态。
 - 设置页展示模型配置状态、应用版本、Electron/Chromium/Node 版本与数据目录。
@@ -39,9 +42,10 @@
 | 代码编辑   | Monaco Editor 0.57（本地 Worker、手动保存） |
 | Git        | 系统 Git CLI（只读 status/diff，参数数组）  |
 | 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）  |
+| AI 接入    | LangChain.js（@langchain/deepseek）         |
 | 数据校验   | Zod 4                                       |
 | 测试/规范  | Vitest 5、ESLint 10、Prettier 3             |
-| 规划中     | LangChain.js、ripgrep                       |
+| 规划中     | ripgrep（阶段 5）                           |
 
 ## 环境要求
 
@@ -88,7 +92,7 @@ V1 按项目决定采用**本地 `.env`**，不提供应用内密钥编辑：
 打包后（阶段 7）从数据目录读取 `.env`，路径会显示在设置页，通常为
 `%APPDATA%\DevPilot\.env`。
 
-安全边界：`.env` 是本地明文文件，不等同于系统凭据库；它已被 `.gitignore` 忽略。API Key 只由主进程读取，不会进入 Renderer、数据库或日志。阶段 4 接通云端模型后，相关代码内容会发送到所配置的模型服务，界面与安全文档会明确提示。
+安全边界：`.env` 是本地明文文件，不等同于系统凭据库；它已被 `.gitignore` 忽略。API Key 只由主进程读取，不会进入 Renderer、数据库或日志。阶段 4 起，对话内容会发送到所配置的云端模型；阶段 5 起才会发送仓库文件片段，界面与安全文档会持续提示。
 
 ## 安全与隐私
 
@@ -99,6 +103,7 @@ V1 按项目决定采用**本地 `.env`**，不提供应用内密钥编辑：
 - IPC 入参由主进程重新校验，错误以稳定错误码返回。
 - 用户手动编辑保存会重新校验路径与文件哈希，外部修改不会被静默覆盖。
 - Git 只读：仅执行固定的 `status` / `diff` / `rev-parse` / `branch` 参数数组，`shell: false`，无提交、暂存或推送操作，并限制超时与输出大小。
+- AI 对话：仅主进程持有模型请求与 AbortController；系统提示声明未读取仓库文件，禁止声称查看过代码；取消、超时或失败的部分回答不写入数据库。阶段 4 只发送对话内容，不发送仓库文件。
 - AI 修改文件必须经过 Diff 展示与用户确认（阶段 6 实现）。
 - 页面禁止任意导航，外部链接仅允许 `https://` 通过系统浏览器打开。
 
@@ -106,7 +111,8 @@ V1 按项目决定采用**本地 `.env`**，不提供应用内密钥编辑：
 
 Electron `userData` 目录（Windows 通常为 `%APPDATA%\DevPilot`）用于保存 `.env`
 与 SQLite 数据库 `devpilot.db`（含 WAL 日志文件）。数据库由主进程启动时创建并执行迁移，
-应用退出时关闭连接；若初始化失败，应用仍可启动，但本次运行不会持久化仓库信息。
+保存仓库元数据、对话与消息；应用退出时先中止进行中的模型请求，再关闭连接。若初始化失败，
+应用仍可启动，但本次运行不会持久化仓库或对话。
 
 ## 目录结构
 

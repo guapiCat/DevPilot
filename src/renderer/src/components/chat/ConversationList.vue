@@ -3,10 +3,14 @@ import { ChatDotRound, Plus } from '@element-plus/icons-vue'
 import type { Conversation } from '@shared/types/chat'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 
-defineProps<{
-  conversations: Conversation[]
-  activeId: string | null
-}>()
+withDefaults(
+  defineProps<{
+    conversations: Conversation[]
+    activeId: string | null
+    creating?: boolean
+  }>(),
+  { creating: false }
+)
 
 const emit = defineEmits<{
   create: []
@@ -28,7 +32,13 @@ function formatTime(iso: string): string {
     <header class="header">
       <span>会话</span>
       <el-tooltip content="新建会话" placement="right">
-        <el-button circle size="small" aria-label="新建会话" @click="emit('create')">
+        <el-button
+          circle
+          size="small"
+          aria-label="新建会话"
+          :loading="creating"
+          @click="emit('create')"
+        >
           <el-icon><Plus /></el-icon>
         </el-button>
       </el-tooltip>

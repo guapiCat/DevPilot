@@ -1,5 +1,14 @@
 import type { AiConfigStatus, AppInfo } from '@shared/types/app'
 import type { PingResponse } from '@shared/types/api'
+import type {
+  AiConnectionTestResult,
+  CancelChatResult,
+  ChatEvent,
+  ChatMessage,
+  Conversation,
+  RetryChatResult,
+  SendChatResult
+} from '@shared/types/chat'
 import type { GitDiffResult, GitStatus } from '@shared/types/git'
 import type { ErrorCode, IpcErrorPayload, IpcResult } from '@shared/types/ipc'
 import type {
@@ -38,6 +47,36 @@ export const desktopApi = {
   settings: {
     async getAiConfigStatus(): Promise<AiConfigStatus> {
       return unwrap(await window.devPilot.settings.getAiConfigStatus())
+    },
+    async testConnection(): Promise<AiConnectionTestResult> {
+      return unwrap(await window.devPilot.settings.testConnection())
+    }
+  },
+  chat: {
+    async listConversations(): Promise<Conversation[]> {
+      return unwrap(await window.devPilot.chat.listConversations())
+    },
+    async createConversation(repositoryId: string | null): Promise<Conversation> {
+      return unwrap(await window.devPilot.chat.createConversation(repositoryId))
+    },
+    async getMessages(conversationId: string): Promise<ChatMessage[]> {
+      return unwrap(await window.devPilot.chat.getMessages(conversationId))
+    },
+    async send(input: {
+      requestId: string
+      conversationId: string
+      content: string
+    }): Promise<SendChatResult> {
+      return unwrap(await window.devPilot.chat.send(input))
+    },
+    async retry(input: { requestId: string; conversationId: string }): Promise<RetryChatResult> {
+      return unwrap(await window.devPilot.chat.retry(input))
+    },
+    async cancel(requestId: string): Promise<CancelChatResult> {
+      return unwrap(await window.devPilot.chat.cancel(requestId))
+    },
+    onEvent(listener: (event: ChatEvent) => void): () => void {
+      return window.devPilot.chat.onEvent(listener)
     }
   },
   repository: {

@@ -1,8 +1,8 @@
 # DevPilot 数据库表结构
 
-> 适用范围：V1（阶段 1–3 已实现部分与后续阶段预留表）
+> 适用范围：V1（阶段 1–4 已实现部分与后续阶段预留表）
 > 事实来源：`src/main/database/database.ts` 的迁移定义
-> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011）、[SECURITY.md](SECURITY.md)
+> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012）、[SECURITY.md](SECURITY.md)
 
 ## 1. 数据库位置与连接
 
@@ -13,7 +13,8 @@
   - `foreign_keys = ON`：SQLite 默认关闭外键，必须显式启用。
   - `busy_timeout = 5000`：遇到锁时最多等待 5 秒。
 - 应用启动时打开并迁移；退出时（`will-quit`）关闭连接。
-- 初始化失败不会阻断启动，只是本次运行不持久化仓库信息（内存模式）。
+- 初始化失败不会阻断启动，只是本次运行不持久化仓库与对话信息（内存模式）。
+- 阶段 4 起写入仓库、会话与消息；`edit_sessions`、`file_edits` 仍为阶段 6 预留。
 
 ## 2. 迁移机制
 
@@ -72,7 +73,7 @@ repositories
 
 ### 4.1 repositories — 已登记仓库
 
-当前唯一实际写入的表，用于跨启动恢复仓库列表。
+用于跨启动恢复仓库列表；阶段 3 起写入，阶段 4 起与对话表共同使用。
 
 | 列           | 类型 | 约束        | 说明                                     |
 | ------------ | ---- | ----------- | ---------------------------------------- |
@@ -88,7 +89,7 @@ repositories
 
 写入路径：`RepositoryService.register()` 新目录调用 `insert`，重复登记调用 `touch` 刷新 `updated_at`。
 
-### 4.2 conversations — 对话（阶段 4 使用）
+### 4.2 conversations — 对话（阶段 4 已使用）
 
 | 列              | 类型 | 约束                                              | 说明                   |
 | --------------- | ---- | ------------------------------------------------- | ---------------------- |
@@ -100,7 +101,9 @@ repositories
 
 索引：`idx_conversations_repository (repository_id, updated_at DESC)`。
 
-### 4.3 messages — 消息（阶段 4 使用）
+写入路径：`ChatService.createConversation()` 插入标题为“新会话”的空会话（可关联已登记仓库）；首条用户消息写入时，`ChatStore.appendUserMessage()` 在同一事务内把标题更新为消息前 30 个字符（空白折叠）；每次写入消息都会刷新 `updated_at`，列表按 `updated_at DESC, rowid DESC` 排序。
+
+### 4.3 messages — 消息（阶段 4 已使用）
 
 | 列                | 类型 | 约束                                                  | 说明                   |
 | ----------------- | ---- | ----------------------------------------------------- | ---------------------- |
@@ -111,6 +114,14 @@ repositories
 | `created_at`      | TEXT | NOT NULL                                              | 创建时间               |
 
 索引：`idx_messages_conversation (conversation_id, created_at)`，按对话读取时保持时间顺序。
+
+写入规则：
+
+- 用户消息在发起模型请求前同步写入；模型请求失败或未配置 Key 时不写入用户消息（配置错误在写入前抛出）。
+- assistant 消息只在流正常完成且文本非空时写入。
+- 用户取消、超时或模型错误时不写入部分回答；界面上的部分文本仅存在于 Renderer 内存。
+- 模型上下文通过 `listRecentMessages(limit)` 读取最近 20 条，再按 24k 字符上限裁剪。
+- `role` 应用层只写入 `user` / `assistant`；历史裁剪会排除其他角色。
 
 ### 4.4 edit_sessions — AI 编辑会话（阶段 6 使用）
 
@@ -160,14 +171,16 @@ repositories
 
 ## 6. 代码接入与数据访问
 
-| 模块                                       | 职责                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `src/main/database/database.ts`            | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                    |
-| `src/main/database/repository.store.ts`    | 唯一直接执行 SQL 的层（Repository 模式）：`list` / `findByPath` / `insert` / `touch` |
-| `src/main/services/repository.service.ts`  | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR`     |
-| `src/main/index.ts`                        | 生命周期：启动打开并迁移，`will-quit` 关闭；失败时降级内存模式                       |
-| `src/main/ipc/*`                           | 通过 `repositoryService` 间接访问，不直接接触连接                                    |
-| `src/renderer/src/services/desktop-api.ts` | 经 IPC 调用 `repository.list()` 等，无数据库能力                                     |
+| 模块                                       | 职责                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `src/main/database/database.ts`            | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                |
+| `src/main/database/repository.store.ts`    | 仓库表 SQL：`list` / `findByPath` / `insert` / `touch`                           |
+| `src/main/database/chat.store.ts`          | 会话/消息表 SQL：列表、插入、标题生成、最近消息读取（全部参数化）                |
+| `src/main/services/repository.service.ts`  | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR` |
+| `src/main/services/chat.service.ts`        | 业务层：会话创建、发送/重试/取消、流式事件、错误映射、连接测试                   |
+| `src/main/index.ts`                        | 生命周期：启动打开并迁移，初始化两个 Store，`will-quit` 取消请求后关闭连接       |
+| `src/main/ipc/*`                           | 通过 service 间接访问，不直接接触连接                                            |
+| `src/renderer/src/services/desktop-api.ts` | 经 IPC 调用 `repository.list()` / `chat.send()` 等，无数据库能力                 |
 
 设计约定：
 
@@ -176,7 +189,7 @@ repositories
 - 数据库列名用 `snake_case`，TypeScript 记录对象用 `camelCase`，由 Store 的 `toRecord` 映射。
 - 时间统一存 ISO 8601 UTC 字符串，排序直接使用字符串比较。
 - ID 统一为 UUID 字符串，由主进程生成。
-- 不保存 API Key、普通文件内容或 Git 命令输出；当前只保存仓库元数据。
+- 不保存 API Key、普通文件内容或 Git 命令输出；当前保存仓库元数据、会话与消息。
 
 ## 7. 常用查询
 
@@ -196,16 +209,29 @@ SELECT id, title, updated_at
 FROM conversations
 WHERE repository_id = ?
 ORDER BY updated_at DESC;
+
+-- 按时间顺序读取某会话消息
+SELECT id, role, content, created_at
+FROM messages
+WHERE conversation_id = ?
+ORDER BY created_at, rowid;
+
+-- 读取最近 N 条消息作为模型上下文（应用层再按字符数裁剪）
+SELECT id, role, content, created_at
+FROM messages
+WHERE conversation_id = ?
+ORDER BY created_at DESC, rowid DESC
+LIMIT ?;
 ```
 
 ## 8. 与阶段计划的对应关系
 
-| 表              | 当前状态       | 使用阶段 |
-| --------------- | -------------- | -------- |
-| `repositories`  | 已使用         | 阶段 3   |
-| `conversations` | 已建表，未写入 | 阶段 4   |
-| `messages`      | 已建表，未写入 | 阶段 4   |
-| `edit_sessions` | 已建表，未写入 | 阶段 6   |
-| `file_edits`    | 已建表，未写入 | 阶段 6   |
+| 表              | 当前状态 | 使用阶段 |
+| --------------- | -------- | -------- |
+| `repositories`  | 已使用   | 阶段 3   |
+| `conversations` | 已使用   | 阶段 4   |
+| `messages`      | 已使用   | 阶段 4   |
+| `edit_sessions` | 未写入   | 阶段 6   |
+| `file_edits`    | 未写入   | 阶段 6   |
 
-验收覆盖：迁移幂等、5 张表与 6 个索引、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`。
+验收覆盖：迁移幂等、5 张表与 6 个索引、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新与跨重启恢复见 `tests/unit/main/chat.store.test.ts`。

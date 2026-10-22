@@ -27,6 +27,8 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@langchain/core": "^1.2.20",
+    "@langchain/deepseek": "^1.1.18",
     "better-sqlite3": "^13.0.3",
     "element-plus": "^2.14.7",
     "monaco-editor": "^0.57.0",

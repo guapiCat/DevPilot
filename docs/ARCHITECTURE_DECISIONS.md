@@ -116,3 +116,19 @@
 - 数据库初始化失败时应用仍可启动，`RepositoryService` 退回内存模式；日志只记录失败事实，不输出路径或数据内容。
 
 **影响**：仓库列表跨启动保留，工作区启动时自动载入最近仓库。原生模块在 `electron-builder` 打包时需要 `asarUnpack` 并验证安装包内加载（阶段 7 待办）。若未来需要事务型后台任务或复杂查询，可继续在同一连接上扩展，无需更换驱动。
+
+## ADR-012：使用 LangChain.js 接入 DeepSeek，并采用固定事件协议
+
+**背景**：阶段 4 需要流式对话、取消、错误分类与后续工具调用能力。直接手写 DeepSeek HTTP/SSE 客户端可行，但阶段 5 的工具调用、消息角色与多轮编排会重复实现 LangChain 已提供的抽象。候选方案是 `openai` SDK 直连（DeepSeek 兼容 OpenAI 协议）、手写 SSE 与 LangChain.js。
+
+**决策**：
+
+- 使用 `@langchain/deepseek`（`ChatDeepSeek`）+ `@langchain/core`。适配层 `DeepSeekAdapter` 实现项目内的 `ModelAdapter` 接口，把 LangChain 的 chunk 归一化为 `text_delta` / `usage` 事件；业务层不直接依赖 LangChain 类型，便于测试注入 Mock 与将来更换供应商。
+- 两个包均标注 `type: module`，但 `exports.require` 指向 `dist/index.cjs`，CJS 主进程可直接 `require`；`externalizeDepsPlugin()` 保持外部依赖，构建产物已验证可加载。
+- 主进程通过固定 channel `chat:event` 推送事件，Preload 只把 payload 交给监听器，不暴露 `IpcRendererEvent` 或任意 channel。
+- `requestId` 由 Renderer 在调用 `chat:send` 前生成并传入，主进程同步登记 `AbortController` 后立即返回。这样 `started` 事件与 invoke 回包不存在竞态，停止按钮也能立即拿到 ID。
+- 同一时间只允许一个活动请求；重复或并发 `requestId` 返回 `VALIDATION_ERROR`，已完成 ID 放入最近 200 个的有界集合防重放。
+- 每个请求恰好一个终态事件（`completed` / `cancelled` / `error`）：正常完成才持久化 assistant 消息；用户取消、120 秒超时、空输出与适配层错误都不写入部分文本，避免污染后续上下文。
+- 历史上下文由数据库读取最近 20 条并按 24k 字符裁剪；system prompt 固定声明“尚未读取仓库文件、不得声称查看过代码”，仓库名是唯一可注入的仓库信息，且不作为指令。
+
+**影响**：退出应用时 `chatService.cancelAll()` 静默中止请求，再关闭 SQLite。取消/失败后的部分回答只存在于 Renderer 内存，重新进入会话只能看到已落库的用户消息；若将来需要保留草稿，可新增消息状态列而不是改变现有行为。阶段 5 的工具调用将复用同一适配层与事件协议，通过新增事件类型扩展，而不改变现有终态语义。

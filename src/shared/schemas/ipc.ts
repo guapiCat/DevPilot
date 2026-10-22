@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  MAX_CHAT_MESSAGE_LENGTH,
   MAX_FILE_WRITE_BYTES,
   MAX_PING_MESSAGE_LENGTH,
   MAX_RELATIVE_PATH_LENGTH
@@ -53,3 +54,43 @@ export const gitDiffInputSchema = z.object({
 })
 
 export type GitDiffInput = z.infer<typeof gitDiffInputSchema>
+
+const requestIdSchema = z.string().uuid('请求 ID 不合法')
+const conversationIdSchema = z.string().uuid('会话 ID 不合法')
+
+export const chatCreateConversationInputSchema = z.object({
+  repositoryId: z.string().uuid('仓库 ID 不合法').nullable()
+})
+
+export type ChatCreateConversationInput = z.infer<typeof chatCreateConversationInputSchema>
+
+export const chatGetMessagesInputSchema = z.object({
+  conversationId: conversationIdSchema
+})
+
+export type ChatGetMessagesInput = z.infer<typeof chatGetMessagesInputSchema>
+
+export const chatSendInputSchema = z.object({
+  requestId: requestIdSchema,
+  conversationId: conversationIdSchema,
+  content: z
+    .string()
+    .trim()
+    .min(1, '消息不能为空')
+    .max(MAX_CHAT_MESSAGE_LENGTH, `消息不能超过 ${MAX_CHAT_MESSAGE_LENGTH} 个字符`)
+})
+
+export type ChatSendInput = z.infer<typeof chatSendInputSchema>
+
+export const chatRetryInputSchema = z.object({
+  requestId: requestIdSchema,
+  conversationId: conversationIdSchema
+})
+
+export type ChatRetryInput = z.infer<typeof chatRetryInputSchema>
+
+export const chatCancelInputSchema = z.object({
+  requestId: requestIdSchema
+})
+
+export type ChatCancelInput = z.infer<typeof chatCancelInputSchema>
