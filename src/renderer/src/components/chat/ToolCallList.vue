@@ -151,7 +151,7 @@ summary::before {
 }
 
 .status-dot.success {
-  background: #45c486;
+  background: var(--dp-success);
 }
 
 .status-dot.error,
@@ -160,7 +160,7 @@ summary::before {
 }
 
 .status-dot.blocked {
-  background: #d9a03c;
+  background: var(--dp-warning);
 }
 
 .status-dot.cancelled {
@@ -191,7 +191,7 @@ summary::before {
 }
 
 .status-text.success {
-  color: #45c486;
+  color: var(--dp-success);
 }
 
 .status-text.error,

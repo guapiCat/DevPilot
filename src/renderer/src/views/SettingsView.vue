@@ -2,8 +2,10 @@
 import { onMounted, ref } from 'vue'
 import type { AiConfigStatus, AppInfo } from '@shared/types/app'
 import { desktopApi } from '@renderer/services/desktop-api'
+import { useThemeStore } from '@renderer/stores/theme'
 import { toErrorMessage } from '@renderer/utils/errors'
 
+const theme = useThemeStore()
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const config = ref<AiConfigStatus | null>(null)
@@ -33,6 +35,10 @@ async function loadSettings(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function handleThemeChange(value: unknown): void {
+  if (value === 'light' || value === 'dark') theme.setMode(value)
 }
 
 async function testMainProcess(): Promise<void> {
@@ -190,6 +196,24 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
         <section class="settings-card">
           <header class="card-header">
             <div>
+              <h2>外观</h2>
+              <p>选择界面配色，偏好保存在本地，重启后保持。</p>
+            </div>
+          </header>
+
+          <el-radio-group :model-value="theme.mode" @change="handleThemeChange">
+            <el-radio-button value="light">浅色</el-radio-button>
+            <el-radio-button value="dark">深色</el-radio-button>
+          </el-radio-group>
+
+          <p class="card-note">
+            浅色适合明亮环境，深色适合长时间编码。编辑器、代码高亮与 Diff 配色会同步切换。
+          </p>
+        </section>
+
+        <section class="settings-card">
+          <header class="card-header">
+            <div>
               <h2>应用与数据</h2>
               <p>版本信息与本地数据目录。</p>
             </div>
@@ -256,7 +280,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
   flex: 0 0 auto;
   padding: 20px 28px 18px;
   border-bottom: 1px solid var(--dp-border);
-  background: linear-gradient(180deg, #1b1e25 0%, #181b21 100%);
+  background: var(--dp-bg-header);
 }
 
 .page-header h1 {
@@ -405,7 +429,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
   padding: 1px 5px;
   border-radius: 4px;
   background: var(--dp-bg-elevated);
-  color: #9fc0ff;
+  color: var(--dp-code-inline);
   font-family: var(--dp-mono);
   font-size: 11.5px;
 }
@@ -420,8 +444,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
   overflow: auto;
   border: 1px solid var(--dp-border);
   border-radius: 8px;
-  background: #111318;
-  color: #c8d2e0;
+  background: var(--dp-bg-code);
+  color: var(--dp-text-code);
   font-family: var(--dp-mono);
   font-size: 11.5px;
   line-height: 1.6;

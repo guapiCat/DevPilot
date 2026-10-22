@@ -96,7 +96,7 @@
   padding: 12px 14px;
   border: 1px solid var(--dp-border);
   border-radius: 8px;
-  background: var(--dp-bg-app);
+  background: var(--dp-bg-code);
   overflow: auto;
 }
 
@@ -128,5 +128,5 @@
 }
 
 .markdown-body tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--dp-row-alt);
 }

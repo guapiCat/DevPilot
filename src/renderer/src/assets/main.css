@@ -1,4 +1,86 @@
 :root {
+  color-scheme: light;
+  --dp-bg-app: #f2f5f9;
+  --dp-bg-sidebar: #f7f9fc;
+  --dp-bg-panel: #ffffff;
+  --dp-bg-elevated: #f3f6fa;
+  --dp-bg-hover: #e9eef5;
+  --dp-border: #dde3ec;
+  --dp-border-strong: #c7d0dc;
+  --dp-text: #1f2733;
+  --dp-text-secondary: #5d6878;
+  --dp-text-muted: #7b8697;
+  --dp-accent: #2f6fe0;
+  --dp-accent-soft: rgba(47, 111, 224, 0.1);
+  --dp-accent-text: #2f6fe0;
+  --dp-success: #1a7f37;
+  --dp-warning: #9a6700;
+  --dp-danger: #cf222e;
+  --dp-bg-header: linear-gradient(180deg, #fbfcfe 0%, #f3f6fa 100%);
+  --dp-bg-code: #f6f8fa;
+  --dp-text-code: #24292f;
+  --dp-code-inline: #1f5fbf;
+  --dp-icon-folder: #c58a1a;
+  --dp-scrollbar-thumb: #c3ccd9;
+  --dp-scrollbar-thumb-hover: #a9b5c5;
+  --dp-selection: rgba(47, 111, 224, 0.22);
+  --dp-row-alt: rgba(15, 23, 42, 0.03);
+  --dp-diff-modified-bg: rgba(154, 103, 0, 0.12);
+  --dp-diff-modified-text: #9a6700;
+  --dp-diff-added-bg: rgba(26, 127, 55, 0.12);
+  --dp-diff-added-text: #1a7f37;
+  --dp-diff-deleted-bg: rgba(207, 34, 46, 0.1);
+  --dp-diff-deleted-text: #cf222e;
+  --dp-diff-renamed-bg: rgba(47, 111, 224, 0.12);
+  --dp-diff-renamed-text: #2f6fe0;
+  --dp-diff-warning-bg: rgba(154, 103, 0, 0.08);
+  --dp-diff-line-add-bg: rgba(26, 127, 55, 0.07);
+  --dp-diff-line-add-text: #116329;
+  --dp-diff-line-del-bg: rgba(207, 34, 46, 0.07);
+  --dp-diff-line-del-text: #a40e26;
+  --dp-diff-hunk-text: #2f6fe0;
+  --dp-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --hl-fg: #24292e;
+  --hl-keyword: #d73a49;
+  --hl-title: #6f42c1;
+  --hl-constant: #005cc5;
+  --hl-string: #032f62;
+  --hl-builtin: #e36209;
+  --hl-comment: #6a737d;
+  --hl-tag: #22863a;
+  --hl-section: #005cc5;
+  --hl-bullet: #735c0f;
+  --hl-addition-fg: #22863a;
+  --hl-addition-bg: #f0fff4;
+  --hl-deletion-fg: #b31d28;
+  --hl-deletion-bg: #ffeef0;
+  --el-color-primary: var(--dp-accent);
+  --el-color-primary-light-3: #6d9ae9;
+  --el-color-primary-light-5: #97b7ef;
+  --el-color-primary-light-7: #c1d4f6;
+  --el-color-primary-light-8: #d5e2fa;
+  --el-color-primary-light-9: #eaf1fc;
+  --el-color-primary-dark-2: #2659b3;
+  --el-bg-color: var(--dp-bg-panel);
+  --el-bg-color-page: var(--dp-bg-app);
+  --el-bg-color-overlay: var(--dp-bg-panel);
+  --el-fill-color-blank: var(--dp-bg-panel);
+  --el-fill-color-light: var(--dp-bg-elevated);
+  --el-fill-color-lighter: #f7f9fc;
+  --el-fill-color-dark: #e9eef5;
+  --el-border-color: var(--dp-border);
+  --el-border-color-light: var(--dp-border);
+  --el-border-color-lighter: #e8ecf2;
+  --el-border-color-extra-light: #f0f3f7;
+  --el-text-color-primary: var(--dp-text);
+  --el-text-color-regular: #3c4658;
+  --el-text-color-secondary: var(--dp-text-secondary);
+  --el-text-color-placeholder: var(--dp-text-muted);
+  --el-text-color-disabled: #a8b0bd;
+  --el-mask-color: rgba(15, 23, 42, 0.45);
+}
+
+html.dark {
   color-scheme: dark;
   --dp-bg-app: #15171c;
   --dp-bg-sidebar: #191c22;
@@ -12,13 +94,47 @@
   --dp-text-muted: #697182;
   --dp-accent: #4f8cff;
   --dp-accent-soft: rgba(79, 140, 255, 0.14);
+  --dp-accent-text: #a6c4ff;
   --dp-success: #3fb950;
   --dp-warning: #d29922;
   --dp-danger: #f85149;
-  --dp-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-}
-
-html.dark {
+  --dp-bg-header: linear-gradient(180deg, #1b1e25 0%, #181b21 100%);
+  --dp-bg-code: #111318;
+  --dp-text-code: #c8d2e0;
+  --dp-code-inline: #9fc0ff;
+  --dp-icon-folder: #d3a84a;
+  --dp-scrollbar-thumb: #333945;
+  --dp-scrollbar-thumb-hover: #414957;
+  --dp-selection: rgba(79, 140, 255, 0.35);
+  --dp-row-alt: rgba(255, 255, 255, 0.02);
+  --dp-diff-modified-bg: rgba(230, 179, 74, 0.16);
+  --dp-diff-modified-text: #e6b34a;
+  --dp-diff-added-bg: rgba(86, 190, 120, 0.16);
+  --dp-diff-added-text: #6fd08c;
+  --dp-diff-deleted-bg: rgba(235, 108, 108, 0.16);
+  --dp-diff-deleted-text: #eb6c6c;
+  --dp-diff-renamed-bg: rgba(122, 162, 255, 0.16);
+  --dp-diff-renamed-text: #8fb4ff;
+  --dp-diff-warning-bg: rgba(230, 179, 74, 0.08);
+  --dp-diff-line-add-bg: rgba(86, 190, 120, 0.08);
+  --dp-diff-line-add-text: #8fdf9f;
+  --dp-diff-line-del-bg: rgba(235, 108, 108, 0.08);
+  --dp-diff-line-del-text: #f19a9a;
+  --dp-diff-hunk-text: #8fb4ff;
+  --hl-fg: #c9d1d9;
+  --hl-keyword: #ff7b72;
+  --hl-title: #d2a8ff;
+  --hl-constant: #79c0ff;
+  --hl-string: #a5d6ff;
+  --hl-builtin: #ffa657;
+  --hl-comment: #8b949e;
+  --hl-tag: #7ee787;
+  --hl-section: #1f6feb;
+  --hl-bullet: #f2cc60;
+  --hl-addition-fg: #aff5b4;
+  --hl-addition-bg: #033a16;
+  --hl-deletion-fg: #ffdcd7;
+  --hl-deletion-bg: #67060c;
   --el-color-primary: var(--dp-accent);
   --el-color-primary-light-3: #78a6ff;
   --el-color-primary-light-5: #9cbfff;
@@ -91,19 +207,19 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333945;
+  background: var(--dp-scrollbar-thumb);
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #414957;
+  background: var(--dp-scrollbar-thumb-hover);
   background-clip: content-box;
 }
 
 ::selection {
-  background: rgba(79, 140, 255, 0.35);
+  background: var(--dp-selection);
 }
 
 .el-button {

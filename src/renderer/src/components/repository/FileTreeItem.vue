@@ -107,7 +107,7 @@ function activate(): void {
 
 .node-icon {
   flex: 0 0 15px;
-  color: #d3a84a;
+  color: var(--dp-icon-folder);
 }
 
 .tree-item .label {

@@ -27,6 +27,32 @@ globalThis.MonacoEnvironment = {
   }
 }
 
+monaco.editor.defineTheme('devpilot-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [],
+  colors: {
+    'editor.background': '#ffffff',
+    'editor.foreground': '#1f2733',
+    'editorGutter.background': '#ffffff',
+    'editorLineNumber.foreground': '#9aa4b2',
+    'editorLineNumber.activeForeground': '#5d6878',
+    'editor.lineHighlightBackground': '#f6f8fb',
+    'editor.selectionBackground': '#cfe1ff',
+    'editor.inactiveSelectionBackground': '#e3edff',
+    'editorCursor.foreground': '#2f6fe0',
+    'editorWidget.background': '#ffffff',
+    'editorWidget.border': '#dde3ec',
+    'editorSuggestWidget.background': '#ffffff',
+    'editorSuggestWidget.border': '#dde3ec',
+    'editorHoverWidget.background': '#ffffff',
+    'editorHoverWidget.border': '#dde3ec',
+    'scrollbarSlider.background': '#c3ccd966',
+    'scrollbarSlider.hoverBackground': '#a9b5c599',
+    'scrollbarSlider.activeBackground': '#a9b5c5cc'
+  }
+})
+
 monaco.editor.defineTheme('devpilot-dark', {
   base: 'vs-dark',
   inherit: true,

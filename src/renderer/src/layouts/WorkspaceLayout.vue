@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, type Component } from 'vue'
-import { ChatDotRound, FolderOpened, Setting } from '@element-plus/icons-vue'
+import { ChatDotRound, FolderOpened, Moon, Setting, Sunny } from '@element-plus/icons-vue'
 import { desktopApi } from '@renderer/services/desktop-api'
+import { useThemeStore } from '@renderer/stores/theme'
 
 interface NavItem {
   name: string
@@ -16,6 +17,7 @@ const navItems: NavItem[] = [
 ]
 
 const appVersion = ref('0.1.0')
+const theme = useThemeStore()
 
 onMounted(async () => {
   try {
@@ -54,6 +56,15 @@ onMounted(async () => {
         <span class="status-dot"></span>
         <span>本地模式</span>
         <span class="version">v{{ appVersion }}</span>
+        <button
+          type="button"
+          class="theme-toggle"
+          :title="theme.mode === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
+          :aria-label="theme.mode === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
+          @click="theme.toggle()"
+        >
+          <el-icon :size="14"><Sunny v-if="theme.mode === 'dark'" /><Moon v-else /></el-icon>
+        </button>
       </div>
     </aside>
 
@@ -148,7 +159,7 @@ onMounted(async () => {
 
 .nav-item.router-link-active {
   background: var(--dp-accent-soft);
-  color: #a6c4ff;
+  color: var(--dp-accent-text);
 }
 
 .nav-item.router-link-active::before {
@@ -177,12 +188,36 @@ onMounted(async () => {
   height: 6px;
   border-radius: 50%;
   background: var(--dp-success);
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dp-success) 14%, transparent);
 }
 
 .version {
   margin-left: auto;
   font-family: var(--dp-mono);
+}
+
+.theme-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dp-text-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--dp-border);
+  background: var(--dp-bg-hover);
+  color: var(--dp-text);
 }
 
 .content {

@@ -4,17 +4,18 @@ import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
-import 'highlight.js/styles/github-dark.css'
 import './assets/main.css'
+import './assets/highlight.css'
 import './assets/markdown.css'
 import App from './App.vue'
 import { router } from './router'
-
-document.documentElement.classList.add('dark')
+import { useThemeStore } from './stores/theme'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
+useThemeStore(pinia).initialize()
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 

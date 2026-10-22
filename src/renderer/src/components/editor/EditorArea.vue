@@ -7,13 +7,20 @@ import EmptyState from '@renderer/components/common/EmptyState.vue'
 import { desktopApi, DesktopApiError } from '@renderer/services/desktop-api'
 import { monaco } from '@renderer/services/monaco'
 import { useRepositoryStore } from '@renderer/stores/repository'
+import { useThemeStore } from '@renderer/stores/theme'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
 import { toErrorMessage } from '@renderer/utils/errors'
 import { getMonacoLanguage } from '@renderer/utils/language'
 
 const workspace = useWorkspaceStore()
 const repository = useRepositoryStore()
+const theme = useThemeStore()
 const { activeRepository } = storeToRefs(repository)
+const monacoTheme = computed(() => (theme.mode === 'dark' ? 'devpilot-dark' : 'devpilot-light'))
+
+watch(monacoTheme, (value) => {
+  monaco.editor.setTheme(value)
+})
 const {
   openTabs,
   activeFilePath,
@@ -72,7 +79,7 @@ function ensureEditor(): monaco.editor.IStandaloneCodeEditor | null {
     editor = monaco.editor.create(editorHost.value, {
       readOnly: false,
       automaticLayout: true,
-      theme: 'devpilot-dark',
+      theme: monacoTheme.value,
       minimap: { enabled: false },
       fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace",
       fontSize: 12.5,
@@ -478,7 +485,7 @@ onBeforeUnmount(() => {
 }
 
 .file-state.dirty {
-  color: #e6b34a;
+  color: var(--dp-warning);
 }
 
 .editor-stage {

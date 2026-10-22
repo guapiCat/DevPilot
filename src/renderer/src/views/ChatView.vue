@@ -113,7 +113,7 @@ async function handleRemove(id: string): Promise<void> {
   gap: 20px;
   padding: 20px 28px 18px;
   border-bottom: 1px solid var(--dp-border);
-  background: linear-gradient(180deg, #1b1e25 0%, #181b21 100%);
+  background: var(--dp-bg-header);
 }
 
 .page-header h1 {

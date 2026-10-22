@@ -443,7 +443,7 @@ onBeforeUnmount(() => {
   padding: 1px 7px;
   border: 1px solid var(--dp-border);
   border-radius: 999px;
-  color: #a6c4ff;
+  color: var(--dp-accent-text);
   font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -538,9 +538,9 @@ onBeforeUnmount(() => {
 }
 
 .toolbar-toggle.active {
-  border-color: rgba(79, 140, 255, 0.28);
+  border-color: color-mix(in srgb, var(--dp-accent) 28%, transparent);
   background: var(--dp-accent-soft);
-  color: #a6c4ff;
+  color: var(--dp-accent-text);
 }
 
 .workspace-body {

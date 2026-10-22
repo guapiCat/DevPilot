@@ -111,7 +111,7 @@
 验证结果：
 
 - `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm run build` 通过。
-- `npm test`：26 个测试文件、255 个用例通过（2 个“缺少 ripgrep”用例因内置 `rg` 可用而跳过）；覆盖 Tool Registry、敏感文件、5 个工具、真实 ripgrep 集成、Agent 循环、适配器工具分片、ChatService 终态与落库、v1→v2 迁移、Markdown 渲染。
+- `npm test`：27 个测试文件、257 个用例通过（2 个“缺少 ripgrep”用例因内置 `rg` 可用而跳过）；覆盖 Tool Registry、敏感文件、5 个工具、真实 ripgrep 集成、Agent 循环、适配器工具分片、ChatService 终态与落库、v1→v2 迁移、Markdown 渲染与主题偏好解析。
 - 未覆盖：真实 DeepSeek 工具调用端到端验收依赖本地 `.env` 中的真实 Key 与额度；真实 ripgrep 集成用例使用内置 `rg`，全部不可用时工具返回 `RG_NOT_AVAILABLE` 且不中断对话。
 
 ## 阶段 6：Diff 修改闭环
