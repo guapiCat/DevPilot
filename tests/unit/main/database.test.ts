@@ -81,6 +81,45 @@ describe('openDatabase', () => {
     ])
   })
 
+  it('messages 表包含 tool_calls 列', () => {
+    const columns = db
+      .prepare<[], { name: string }>('PRAGMA table_info(messages)')
+      .all()
+      .map((row) => row.name)
+
+    expect(columns).toContain('tool_calls')
+  })
+
+  it('从 v1 升级到 v2 保留已有消息', () => {
+    db.prepare(
+      `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
+       VALUES ('c1', NULL, 'demo', 'now', 'now')`
+    ).run()
+    db.prepare(
+      `INSERT INTO messages (id, conversation_id, role, content, created_at)
+       VALUES ('m1', 'c1', 'user', 'hello', 'now')`
+    ).run()
+
+    db.exec('ALTER TABLE messages DROP COLUMN tool_calls;')
+    db.pragma('user_version = 1')
+
+    for (const instance of openDatabases.splice(0)) {
+      if (instance.open) instance.close()
+    }
+
+    const upgraded = open()
+    expect(upgraded.pragma('user_version', { simple: true })).toBe(2)
+    expect(upgraded.prepare('SELECT content FROM messages WHERE id = ?').get('m1')).toEqual({
+      content: 'hello'
+    })
+    expect(
+      upgraded
+        .prepare<[], { name: string }>('PRAGMA table_info(messages)')
+        .all()
+        .map((row) => row.name)
+    ).toContain('tool_calls')
+  })
+
   it('重复打开时迁移幂等且保留数据', () => {
     const store = new RepositoryStore(db)
     store.insert({

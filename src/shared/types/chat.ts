@@ -1,4 +1,5 @@
 import type { ErrorCode } from './ipc'
+import type { ToolCallRecord, ToolCallStatus } from './tool'
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
@@ -10,6 +11,7 @@ export interface ChatMessage {
   content: string
   createdAt: string
   status?: ChatMessageStatus
+  toolCalls?: ToolCallRecord[]
 }
 
 export interface Conversation {
@@ -23,6 +25,24 @@ export interface Conversation {
 export type ChatEvent =
   | { type: 'started'; requestId: string; conversationId: string; assistantMessageId: string }
   | { type: 'text_delta'; requestId: string; conversationId: string; text: string }
+  | {
+      type: 'tool_started'
+      requestId: string
+      conversationId: string
+      toolCallId: string
+      name: string
+      argsSummary: string
+    }
+  | {
+      type: 'tool_finished'
+      requestId: string
+      conversationId: string
+      toolCallId: string
+      name: string
+      status: ToolCallStatus
+      summary: string
+      durationMs: number
+    }
   | { type: 'completed'; requestId: string; conversationId: string; assistantMessage: ChatMessage }
   | { type: 'cancelled'; requestId: string; conversationId: string }
   | { type: 'error'; requestId: string; conversationId: string; code: ErrorCode; message: string }

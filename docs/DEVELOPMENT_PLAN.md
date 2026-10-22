@@ -9,10 +9,11 @@
 **阶段 2：基础 UI — 已完成**
 **阶段 3：本地仓库与代码浏览 — 已完成**
 **阶段 4：AI 对话 — 已完成**
-**下一步：阶段 5 代码理解工具**
+**阶段 5：代码理解工具 — 已完成**
+**下一步：阶段 6 Diff 修改闭环**
 
-> 阶段 4 已覆盖 DeepSeek 流式对话、停止生成、超时与错误重试、会话/消息持久化与连接测试。
-> 本阶段只发送对话内容；仓库文件读取、工具调用与编辑提案留待阶段 5–6。
+> 阶段 5 已接入 5 个只读工具与受控 Agent 循环，对话页与工作区 AI 面板都会展示工具执行过程，摘要随消息落库。
+> 仓库文件内容与搜索片段会发送到云端模型；AI 提议修改文件仍留待阶段 6。
 
 ## 阶段 1：工程骨架
 
@@ -91,11 +92,27 @@
 
 ## 阶段 5：代码理解工具
 
-- [ ] Tool Registry 与 Zod 参数校验。
-- [ ] `list_files`、`read_file`、`search_code`、`get_git_status`、`get_git_diff`。
-- [ ] Agent 执行循环：轮数限制、工具超时、输出上限、循环保护。
-- [ ] 上下文裁剪、敏感文件过滤、仓库内容提示注入防护。
-- [ ] 工具执行事件展示。
+- [x] Tool Registry 与 Zod 参数校验。
+- [x] `list_files`、`read_file`、`search_code`、`get_git_status`、`get_git_diff`。
+- [x] Agent 执行循环：轮数限制、工具超时、输出上限、循环保护。
+- [x] 上下文裁剪、敏感文件过滤、仓库内容提示注入防护。
+- [x] 工具执行事件展示（对话页 + 工作区右侧 AI 面板），摘要随消息持久化。
+
+实现要点：
+
+- 工具全部在主进程执行且只读；参数使用 `z.strictObject` 校验，JSON Schema 由 `z.toJSONSchema()` 生成后绑定给模型。
+- `agent-runner` 限制 5 轮 / 每轮 4 次 / 每次请求 12 次调用、单工具 15 秒、单工具 12k 字符、单请求 32k 字符；重复调用（工具名 + 参数）直接阻止；达到上限后强制一轮不带工具的收尾调用。
+- 敏感文件按路径拒绝（`.env*`（示例文件除外）、私钥、证书、凭据、`.ssh`/`.aws` 等目录），并对高置信密钥模式做内容阻断与搜索片段脱敏。
+- `search_code` 通过 `spawn('rg', args, { shell: false })` 调用系统 ripgrep，10 秒超时、2 MB 输出上限；返回结果按文件数、条数与片段长度裁剪。
+- 工具输出以 `<tool_result>` 包裹并声明为不可信数据；系统提示要求“先定位再读取”，禁止编造路径/行号/内容。
+- 新增事件 `tool_started` / `tool_finished`，不改变 `completed` / `cancelled` / `error` 的单一终态语义；只持久化调用摘要，不保存工具输出正文。
+- 工作区右侧 AI 面板改为真实对话，与对话页共享同一 chat store，切换路由不会中断生成。
+
+验证结果：
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm run build` 通过。
+- `npm test`：24 个测试文件、225 个用例通过（5 个真实 ripgrep 集成用例因本机 PATH 无 `rg` 跳过）；覆盖 Tool Registry、敏感文件、5 个工具、Agent 循环、适配器工具分片、ChatService 终态与落库、v1→v2 迁移。
+- 未覆盖：真实 DeepSeek 工具调用端到端验收依赖本地 `.env` 中的真实 Key 与额度；`search_code` 的真实搜索需要系统 PATH 中存在 `ripgrep`（阶段 7 评估随包分发），缺失时工具返回 `RG_NOT_AVAILABLE` 且不中断对话。
 
 ## 阶段 6：Diff 修改闭环
 

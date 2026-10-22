@@ -26,6 +26,28 @@ export const MAX_GIT_OUTPUT_BYTES = 5 * 1024 * 1024
 export const MAX_GIT_DIFF_BYTES = 512 * 1024
 export const MAX_GIT_STATUS_ENTRIES = 2000
 
+export const MAX_TOOL_ROUNDS = 5
+export const MAX_TOOL_CALLS_PER_RUN = 12
+export const MAX_TOOL_CALLS_PER_ROUND = 4
+export const MAX_TOOL_RECORDS_PER_MESSAGE = 50
+export const TOOL_EXECUTION_TIMEOUT_MS = 15_000
+export const MAX_TOOL_OUTPUT_CHARS = 12_000
+export const MAX_TOTAL_TOOL_OUTPUT_CHARS = 32_000
+export const MAX_TOOL_ARG_SUMMARY_CHARS = 120
+export const MAX_TOOL_RESULT_SUMMARY_CHARS = 160
+
+export const MAX_TOOL_LIST_ENTRIES = 500
+export const MAX_TOOL_LIST_DEPTH = 3
+export const MAX_TOOL_READ_LINES = 300
+
+export const MAX_SEARCH_QUERY_LENGTH = 200
+export const MAX_SEARCH_FILES = 40
+export const MAX_SEARCH_MATCHES = 200
+export const MAX_SEARCH_MATCHES_PER_FILE = 10
+export const MAX_SEARCH_SNIPPET_CHARS = 240
+export const MAX_SEARCH_RAW_BYTES = 2 * 1024 * 1024
+export const RG_COMMAND_TIMEOUT_MS = 10_000
+
 export const IGNORED_DIRECTORY_NAMES = ['.git', 'node_modules'] as const
 
 export const AI_CONFIG_ENV = {

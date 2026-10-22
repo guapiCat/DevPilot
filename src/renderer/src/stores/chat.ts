@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { ChatEvent, ChatMessage, ChatMessageStatus, Conversation } from '@shared/types/chat'
+import type { ToolCallRecord } from '@shared/types/tool'
 import { desktopApi } from '@renderer/services/desktop-api'
 import { toErrorMessage } from '@renderer/utils/errors'
 
@@ -20,6 +21,8 @@ export const useChatStore = defineStore('chat', () => {
   const errorMessage = ref<string | null>(null)
   const retryConversationId = ref<string | null>(null)
   const isCreatingConversation = ref(false)
+  const aiConfigured = ref(true)
+  const aiConfigLoading = ref(true)
   const initialized = ref(false)
 
   let pending: PendingRun | null = null
@@ -64,6 +67,27 @@ export const useChatStore = defineStore('chat', () => {
     patchMessage(conversationId, messageId, { status })
   }
 
+  function updateToolCalls(
+    conversationId: string,
+    messageId: string,
+    update: (calls: ToolCallRecord[]) => ToolCallRecord[]
+  ): void {
+    const message = messagesOf(conversationId).find((item) => item.id === messageId)
+    if (!message) return
+    patchMessage(conversationId, messageId, { toolCalls: update(message.toolCalls ?? []) })
+  }
+
+  function settleRunningToolCalls(
+    conversationId: string,
+    messageId: string,
+    status: ToolCallRecord['status'],
+    summary: string
+  ): void {
+    updateToolCalls(conversationId, messageId, (calls) =>
+      calls.map((call) => (call.status === 'running' ? { ...call, status, summary } : call))
+    )
+  }
+
   function beginRun(run: PendingRun): void {
     pending = run
     isGenerating.value = true
@@ -97,6 +121,51 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
+    if (event.type === 'tool_started') {
+      updateToolCalls(run.conversationId, run.assistantMessageId, (calls) => [
+        ...calls.filter((call) => call.id !== event.toolCallId),
+        {
+          id: event.toolCallId,
+          name: event.name,
+          argumentsSummary: event.argsSummary,
+          status: 'running',
+          summary: '',
+          durationMs: 0
+        }
+      ])
+      return
+    }
+
+    if (event.type === 'tool_finished') {
+      updateToolCalls(run.conversationId, run.assistantMessageId, (calls) => {
+        if (!calls.some((call) => call.id === event.toolCallId)) {
+          return [
+            ...calls,
+            {
+              id: event.toolCallId,
+              name: event.name,
+              argumentsSummary: '',
+              status: event.status,
+              summary: event.summary,
+              durationMs: event.durationMs
+            }
+          ]
+        }
+
+        return calls.map((call) =>
+          call.id === event.toolCallId
+            ? {
+                ...call,
+                status: event.status,
+                summary: event.summary,
+                durationMs: event.durationMs
+              }
+            : call
+        )
+      })
+      return
+    }
+
     if (event.type === 'completed') {
       setMessages(
         run.conversationId,
@@ -110,20 +179,25 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     if (event.type === 'cancelled') {
+      settleRunningToolCalls(run.conversationId, run.assistantMessageId, 'cancelled', '已停止')
       markStatus(run.conversationId, run.assistantMessageId, 'cancelled')
       endRun(event.requestId)
       return
     }
 
+    if (event.type !== 'error') return
+
     const placeholder = messagesOf(run.conversationId).find(
       (item) => item.id === run.assistantMessageId
     )
-    if (!placeholder || !placeholder.content.trim()) {
+    const hasToolCalls = (placeholder?.toolCalls?.length ?? 0) > 0
+    if (!placeholder || (!placeholder.content.trim() && !hasToolCalls)) {
       setMessages(
         run.conversationId,
         messagesOf(run.conversationId).filter((item) => item.id !== run.assistantMessageId)
       )
     } else {
+      settleRunningToolCalls(run.conversationId, run.assistantMessageId, 'error', '请求失败')
       markStatus(run.conversationId, run.assistantMessageId, 'error')
     }
 
@@ -145,10 +219,23 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function loadAiConfig(): Promise<void> {
+    try {
+      const status = await desktopApi.settings.getAiConfigStatus()
+      aiConfigured.value = status.configured
+    } catch (error) {
+      errorMessage.value = toErrorMessage(error)
+    } finally {
+      aiConfigLoading.value = false
+    }
+  }
+
   async function initialize(): Promise<void> {
     if (initialized.value) return
     initialized.value = true
     desktopApi.chat.onEvent(handleEvent)
+
+    void loadAiConfig()
 
     await refreshConversations()
     if (!activeConversationId.value && conversations.value.length > 0) {
@@ -298,12 +385,15 @@ export const useChatStore = defineStore('chat', () => {
     errorMessage,
     retryConversationId,
     isCreatingConversation,
+    aiConfigured,
+    aiConfigLoading,
     activeConversation,
     activeMessages,
     isGeneratingInActiveConversation,
     canRetry,
     setError,
     initialize,
+    loadAiConfig,
     refreshConversations,
     createConversation,
     selectConversation,

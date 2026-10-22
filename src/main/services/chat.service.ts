@@ -3,7 +3,6 @@ import {
   CHAT_HISTORY_MAX_MESSAGES,
   CHAT_REQUEST_TIMEOUT_MS,
   DEFAULT_CONVERSATION_TITLE,
-  MAX_CHAT_OUTPUT_TOKENS,
   MODEL_CONNECTION_TEST_TIMEOUT_MS
 } from '@shared/constants/app'
 import type {
@@ -18,10 +17,13 @@ import type {
   SendChatResult
 } from '@shared/types/chat'
 import type { ErrorCode } from '@shared/types/ipc'
+import { runAgent, type AgentLimits } from '../ai/agent-runner'
+import { createDefaultToolRegistry } from '../ai/tools'
 import { createDeepSeekAdapter, resolveAiConfig } from '../ai/model-manager'
 import { ModelAdapterError } from '../ai/model-error'
 import type { ModelAdapter } from '../ai/model-adapter'
 import { buildModelMessages } from '../ai/prompt-builder'
+import type { ToolRegistry } from '../ai/tools/tool-registry'
 import type { ChatStore } from '../database/chat.store'
 import type { ResolvedAiConfig } from './settings.service'
 import { repositoryService } from './repository.service'
@@ -49,6 +51,8 @@ export interface ChatServiceOptions {
   now?: () => Date
   env?: NodeJS.ProcessEnv
   locateRepository?: RepositoryLocator
+  toolRegistry?: ToolRegistry
+  agentLimits?: Partial<AgentLimits>
 }
 
 const MAX_REMEMBERED_REQUESTS = 200
@@ -70,6 +74,8 @@ export class ChatService {
   private readonly now: () => Date
   private readonly env: NodeJS.ProcessEnv
   private readonly locateRepository: RepositoryLocator
+  private readonly toolRegistry: ToolRegistry | null
+  private readonly agentLimits: Partial<AgentLimits>
 
   constructor(options: ChatServiceOptions = {}) {
     this.adapterFactory = options.adapterFactory ?? createDeepSeekAdapter
@@ -78,6 +84,8 @@ export class ChatService {
     this.now = options.now ?? (() => new Date())
     this.env = options.env ?? process.env
     this.locateRepository = options.locateRepository ?? defaultLocateRepository
+    this.toolRegistry = options.toolRegistry ?? null
+    this.agentLimits = options.agentLimits ?? {}
   }
 
   initialize(store: ChatStore | null): void {
@@ -238,7 +246,6 @@ export class ChatService {
       run.controller.abort()
     }, this.timeoutMs)
 
-    let text = ''
     let usage: { inputTokens?: number; outputTokens?: number } | null = null
     let terminal: ChatEvent = this.errorEvent(
       run,
@@ -249,43 +256,83 @@ export class ChatService {
     try {
       const store = this.requireStore()
       const conversation = this.requireConversation(run.conversationId)
+      const toolsEnabled = Boolean(this.toolRegistry && conversation.repositoryId)
       const messages = buildModelMessages(
         store.listRecentMessages(conversation.id, CHAT_HISTORY_MAX_MESSAGES),
-        { repositoryName: this.repositoryName(conversation.repositoryId) }
+        {
+          repositoryName: this.repositoryName(conversation.repositoryId),
+          toolsEnabled
+        }
       )
 
       const adapter = this.adapterFactory(config)
-      for await (const event of adapter.stream({
+      const result = await runAgent({
+        adapter,
+        registry: toolsEnabled ? this.toolRegistry : null,
+        repositoryId: conversation.repositoryId,
         messages,
         signal: run.controller.signal,
-        maxTokens: MAX_CHAT_OUTPUT_TOKENS
-      })) {
-        if (run.controller.signal.aborted) break
-
-        if (event.type === 'text_delta' && event.text) {
-          text += event.text
-          this.emit(run, {
-            type: 'text_delta',
-            requestId: run.requestId,
-            conversationId: run.conversationId,
-            text: event.text
-          })
-        } else if (event.type === 'usage') {
-          usage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens }
+        limits: this.agentLimits,
+        callbacks: {
+          onTextDelta: (delta) => {
+            this.emit(run, {
+              type: 'text_delta',
+              requestId: run.requestId,
+              conversationId: run.conversationId,
+              text: delta
+            })
+          },
+          onToolStarted: (call) => {
+            this.emit(run, {
+              type: 'tool_started',
+              requestId: run.requestId,
+              conversationId: run.conversationId,
+              toolCallId: call.id,
+              name: call.name,
+              argsSummary: call.argsSummary
+            })
+          },
+          onToolFinished: (record) => {
+            console.info(
+              `[tool] ${record.name} status=${record.status} duration=${record.durationMs}ms`
+            )
+            this.emit(run, {
+              type: 'tool_finished',
+              requestId: run.requestId,
+              conversationId: run.conversationId,
+              toolCallId: record.id,
+              name: record.name,
+              status: record.status,
+              summary: record.summary,
+              durationMs: record.durationMs
+            })
+          },
+          onUsage: () => undefined
         }
-      }
+      })
+
+      usage = result.usage
 
       if (run.abortReason === 'user') {
         terminal = this.cancelledEvent(run)
       } else if (run.abortReason === 'timeout') {
         terminal = this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型响应超时，请重试')
-      } else if (!text.trim()) {
-        terminal = this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型未返回内容')
+      } else if (result.stopped) {
+        terminal = this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型请求已中止，请重试')
+      } else if (!result.answerText.trim()) {
+        terminal = result.roundLimitReached
+          ? this.errorEvent(
+              run,
+              'TOOL_EXECUTION_FAILED',
+              '工具调用轮数或次数已达上限，模型未能给出最终回答'
+            )
+          : this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型未返回内容')
       } else {
         const assistantMessage = store.appendAssistantMessage(
           conversation.id,
-          text,
-          this.now().toISOString()
+          result.text,
+          this.now().toISOString(),
+          result.toolCalls
         )
         terminal = {
           type: 'completed',
@@ -393,4 +440,4 @@ export class ChatService {
   }
 }
 
-export const chatService = new ChatService()
+export const chatService = new ChatService({ toolRegistry: createDefaultToolRegistry() })

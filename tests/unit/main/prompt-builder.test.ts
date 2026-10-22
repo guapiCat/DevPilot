@@ -13,18 +13,34 @@ function message(index: number, content: string, role: ChatMessage['role'] = 'us
 }
 
 describe('buildSystemPrompt', () => {
-  it('声明尚未读取文件并约束不可信内容', () => {
+  it('无工具时声明尚未读取文件并约束不可信内容', () => {
     const prompt = buildSystemPrompt()
-    expect(prompt).toContain('尚未读取或修改任何仓库文件')
+    expect(prompt).toContain('尚未读取任何仓库文件')
     expect(prompt).toContain('不得声称查看过代码')
     expect(prompt).toContain('不可信数据')
+    expect(prompt).not.toContain('list_files')
     expect(prompt).not.toContain('当前关联仓库')
+  })
+
+  it('有工具时列出只读工具、行号引用与不可信数据约束', () => {
+    const prompt = buildSystemPrompt({ toolsEnabled: true })
+    expect(prompt).toContain('list_files')
+    expect(prompt).toContain('search_code')
+    expect(prompt).toContain('read_file')
+    expect(prompt).toContain('相对路径与行号')
+    expect(prompt).toContain('<tool_result>')
+    expect(prompt).toContain('敏感文件已被阻止')
   })
 
   it('只注入仓库名称', () => {
     const prompt = buildSystemPrompt({ repositoryName: 'demo-repo' })
     expect(prompt).toContain('当前关联仓库：demo-repo')
     expect(prompt).not.toContain('F:\\')
+  })
+
+  it('有工具时说明访问范围仅限仓库', () => {
+    const prompt = buildSystemPrompt({ repositoryName: 'demo-repo', toolsEnabled: true })
+    expect(prompt).toContain('工具访问范围仅限该仓库')
   })
 })
 

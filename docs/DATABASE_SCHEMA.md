@@ -1,8 +1,8 @@
 # DevPilot 数据库表结构
 
-> 适用范围：V1（阶段 1–4 已实现部分与后续阶段预留表）
+> 适用范围：V1（阶段 1–5 已实现部分与后续阶段预留表）
 > 事实来源：`src/main/database/database.ts` 的迁移定义
-> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012）、[SECURITY.md](SECURITY.md)
+> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013）、[SECURITY.md](SECURITY.md)
 
 ## 1. 数据库位置与连接
 
@@ -14,15 +14,17 @@
   - `busy_timeout = 5000`：遇到锁时最多等待 5 秒。
 - 应用启动时打开并迁移；退出时（`will-quit`）关闭连接。
 - 初始化失败不会阻断启动，只是本次运行不持久化仓库与对话信息（内存模式）。
-- 阶段 4 起写入仓库、会话与消息；`edit_sessions`、`file_edits` 仍为阶段 6 预留。
+- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；`edit_sessions`、`file_edits` 仍为阶段 6 预留。
 
 ## 2. 迁移机制
 
-迁移定义在 `src/main/database/database.ts` 的 `MIGRATIONS` 数组中，当前只有 v1。
+迁移定义在 `src/main/database/database.ts` 的 `MIGRATIONS` 数组中，当前为 v2。
 
 ```text
-user_version = 0  ──执行 MIGRATIONS[0]──▶ user_version = 1
+user_version = 0 ──MIGRATIONS[0]──▶ 1 ──MIGRATIONS[1]──▶ 2
 ```
+
+v2 内容：`ALTER TABLE messages ADD COLUMN tool_calls TEXT;`，用于保存工具调用摘要，不改动既有数据。
 
 规则：
 
@@ -39,8 +41,8 @@ const MIGRATIONS: readonly Migration[] = [
     /* v1，已发布，保持不变 */
   },
   (db) => {
-    // v2：例如为 repositories.path 增加唯一索引
-    db.exec('CREATE UNIQUE INDEX idx_repositories_path ON repositories(path COLLATE NOCASE);')
+    // v2：为 assistant 消息增加工具调用摘要列
+    db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT;')
   }
 ]
 ```
@@ -103,7 +105,7 @@ repositories
 
 写入路径：`ChatService.createConversation()` 插入标题为“新会话”的空会话（可关联已登记仓库）；首条用户消息写入时，`ChatStore.appendUserMessage()` 在同一事务内把标题更新为消息前 30 个字符（空白折叠）；每次写入消息都会刷新 `updated_at`，列表按 `updated_at DESC, rowid DESC` 排序。
 
-### 4.3 messages — 消息（阶段 4 已使用）
+### 4.3 messages — 消息（阶段 4 已使用，阶段 5 起含工具摘要）
 
 | 列                | 类型 | 约束                                                  | 说明                   |
 | ----------------- | ---- | ----------------------------------------------------- | ---------------------- |
@@ -112,15 +114,33 @@ repositories
 | `role`            | TEXT | NOT NULL                                              | 消息角色（应用层约定） |
 | `content`         | TEXT | NOT NULL                                              | 消息正文               |
 | `created_at`      | TEXT | NOT NULL                                              | 创建时间               |
+| `tool_calls`      | TEXT | 可空（v2 新增）                                       | 工具调用摘要 JSON 数组 |
 
 索引：`idx_messages_conversation (conversation_id, created_at)`，按对话读取时保持时间顺序。
+
+`tool_calls` 的 JSON 结构（每个元素）：
+
+```json
+{
+  "id": "call_1",
+  "name": "read_file",
+  "argumentsSummary": "src/main/index.ts 1-40",
+  "status": "success",
+  "summary": "读取 40 行",
+  "durationMs": 12
+}
+```
+
+- `argumentsSummary` 与 `summary` 是服务端生成的短摘要，长度分别为 ≤120 / ≤160 字符。
+- 读取时用 `toolCallsSchema.safeParse` 校验；JSON 损坏或字段超限时降级为 `undefined`，不抛异常、不打印内容。
+- 不保存工具输出正文、文件内容、搜索片段或 Git Diff。
 
 写入规则：
 
 - 用户消息在发起模型请求前同步写入；模型请求失败或未配置 Key 时不写入用户消息（配置错误在写入前抛出）。
-- assistant 消息只在流正常完成且文本非空时写入。
-- 用户取消、超时或模型错误时不写入部分回答；界面上的部分文本仅存在于 Renderer 内存。
-- 模型上下文通过 `listRecentMessages(limit)` 读取最近 20 条，再按 24k 字符上限裁剪。
+- assistant 消息只在流正常完成且文本非空时写入；有工具调用时把摘要一并写入。
+- 用户取消、超时或模型错误时不写入部分回答，也不写入工具摘要；界面上的部分文本与工具状态仅存在于 Renderer 内存。
+- 模型上下文通过 `listRecentMessages(limit)` 读取最近 20 条，再按 24k 字符上限裁剪；历史消息中的 `toolCalls` 不进入模型上下文。
 - `role` 应用层只写入 `user` / `assistant`；历史裁剪会排除其他角色。
 
 ### 4.4 edit_sessions — AI 编辑会话（阶段 6 使用）
@@ -175,9 +195,9 @@ repositories
 | ------------------------------------------ | -------------------------------------------------------------------------------- |
 | `src/main/database/database.ts`            | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                |
 | `src/main/database/repository.store.ts`    | 仓库表 SQL：`list` / `findByPath` / `insert` / `touch`                           |
-| `src/main/database/chat.store.ts`          | 会话/消息表 SQL：列表、插入、标题生成、最近消息读取（全部参数化）                |
+| `src/main/database/chat.store.ts`          | 会话/消息表 SQL：列表、插入、标题生成、工具摘要 JSON、最近消息读取（全部参数化） |
 | `src/main/services/repository.service.ts`  | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR` |
-| `src/main/services/chat.service.ts`        | 业务层：会话创建、发送/重试/取消、流式事件、错误映射、连接测试                   |
+| `src/main/services/chat.service.ts`        | 业务层：会话创建、发送/重试/取消、Agent 循环、流式与工具事件、错误映射、连接测试 |
 | `src/main/index.ts`                        | 生命周期：启动打开并迁移，初始化两个 Store，`will-quit` 取消请求后关闭连接       |
 | `src/main/ipc/*`                           | 通过 service 间接访问，不直接接触连接                                            |
 | `src/renderer/src/services/desktop-api.ts` | 经 IPC 调用 `repository.list()` / `chat.send()` 等，无数据库能力                 |
@@ -189,7 +209,7 @@ repositories
 - 数据库列名用 `snake_case`，TypeScript 记录对象用 `camelCase`，由 Store 的 `toRecord` 映射。
 - 时间统一存 ISO 8601 UTC 字符串，排序直接使用字符串比较。
 - ID 统一为 UUID 字符串，由主进程生成。
-- 不保存 API Key、普通文件内容或 Git 命令输出；当前保存仓库元数据、会话与消息。
+- 不保存 API Key、普通文件内容、工具输出正文或 Git 命令输出；当前保存仓库元数据、会话、消息与工具调用摘要。
 
 ## 7. 常用查询
 
@@ -210,8 +230,8 @@ FROM conversations
 WHERE repository_id = ?
 ORDER BY updated_at DESC;
 
--- 按时间顺序读取某会话消息
-SELECT id, role, content, created_at
+-- 按时间顺序读取某会话消息（含工具调用摘要）
+SELECT id, role, content, created_at, tool_calls
 FROM messages
 WHERE conversation_id = ?
 ORDER BY created_at, rowid;
@@ -230,8 +250,8 @@ LIMIT ?;
 | --------------- | -------- | -------- |
 | `repositories`  | 已使用   | 阶段 3   |
 | `conversations` | 已使用   | 阶段 4   |
-| `messages`      | 已使用   | 阶段 4   |
+| `messages`      | 已使用   | 阶段 4–5 |
 | `edit_sessions` | 未写入   | 阶段 6   |
 | `file_edits`    | 未写入   | 阶段 6   |
 
-验收覆盖：迁移幂等、5 张表与 6 个索引、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新与跨重启恢复见 `tests/unit/main/chat.store.test.ts`。
+验收覆盖：迁移幂等、5 张表与 6 个索引、v1→v2 升级保留旧数据、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新、`tool_calls` JSON 往返与损坏容错、跨重启恢复见 `tests/unit/main/chat.store.test.ts`。

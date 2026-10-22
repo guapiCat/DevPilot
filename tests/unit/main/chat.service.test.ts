@@ -1,13 +1,19 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '@main/database/database'
 import { ChatStore } from '@main/database/chat.store'
 import { ModelAdapterError } from '@main/ai/model-error'
 import type { ModelAdapter, ModelEvent, ModelStreamRequest } from '@main/ai/model-adapter'
-import { ChatService, type ChatEventSink } from '@main/services/chat.service'
+import { ToolExecutionError, ToolRegistry } from '@main/ai/tools/tool-registry'
+import {
+  ChatService,
+  type ChatEventSink,
+  type ChatServiceOptions
+} from '@main/services/chat.service'
 import { ServiceError } from '@main/utils/service-error'
 import type { ChatEvent } from '@shared/types/chat'
 
@@ -89,7 +95,7 @@ function createSink(): {
 
 function createService(
   behavior: StreamBehavior,
-  options: { timeoutMs?: number } = {}
+  options: Partial<ChatServiceOptions> = {}
 ): ChatService {
   const service = new ChatService({
     adapterFactory: () => createAdapter(behavior),
@@ -431,6 +437,204 @@ describe('ChatService 请求约束', () => {
         sink
       )
     ).toThrowError(/数据库不可用/)
+  })
+})
+
+describe('ChatService 工具循环', () => {
+  beforeEach(() => {
+    const now = new Date().toISOString()
+    db.prepare(
+      'INSERT INTO repositories (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+    ).run('repo-1', 'demo-repo', process.cwd(), now, now)
+  })
+
+  function createToolRegistry(
+    execute: (args: { path: string }) => Promise<{
+      content: string
+      summary: string
+      truncated: boolean
+    }>
+  ): ToolRegistry {
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'read_file',
+      description: '读取文件',
+      schema: z.strictObject({ path: z.string() }),
+      summarizeArgs: (args) => args.path,
+      execute
+    })
+    return registry
+  }
+
+  it('执行工具、发送工具事件并持久化摘要', async () => {
+    const requests: ModelStreamRequest[] = []
+    const execute = vi.fn(async (args: { path: string }) => ({
+      content: `file content: ${args.path}`,
+      summary: `读取 ${args.path}`,
+      truncated: false
+    }))
+    let round = 0
+
+    const service = createService(
+      async function* (request) {
+        requests.push(request)
+        if (request.tools && round === 0) {
+          round += 1
+          yield {
+            type: 'tool_call',
+            id: 'call_1',
+            name: 'read_file',
+            arguments: { path: 'src/a.ts' }
+          }
+          return
+        }
+        yield textDelta('最终回答')
+      },
+      {
+        toolRegistry: createToolRegistry(execute),
+        locateRepository: () => ({ name: 'demo-repo' })
+      }
+    )
+    const conversation = service.createConversation('repo-1')
+    const { events, sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' },
+      sink
+    )
+    const completed = await waitFor((event) => event.type === 'completed')
+
+    expect(events.map((event) => event.type)).toEqual([
+      'started',
+      'tool_started',
+      'tool_finished',
+      'text_delta',
+      'completed'
+    ])
+    expect(requests[0].tools).toHaveLength(1)
+    expect(requests[0].messages[0].content).toContain('list_files')
+
+    expect(completed.type).toBe('completed')
+    if (completed.type === 'completed') {
+      expect(completed.assistantMessage.content).toBe('最终回答')
+      expect(completed.assistantMessage.toolCalls).toEqual([
+        expect.objectContaining({
+          id: 'call_1',
+          name: 'read_file',
+          argumentsSummary: 'src/a.ts',
+          status: 'success',
+          summary: '读取 src/a.ts'
+        })
+      ])
+    }
+
+    const messages = store.listMessages(conversation.id)
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant'])
+    expect(messages[1].toolCalls?.[0].status).toBe('success')
+    expect(JSON.stringify(messages[1].toolCalls)).not.toContain('file content')
+  })
+
+  it('未关联仓库时不向模型绑定工具', async () => {
+    const requests: ModelStreamRequest[] = []
+    const registry = createToolRegistry(async () => ({
+      content: 'x',
+      summary: 'x',
+      truncated: false
+    }))
+    const service = createService(
+      async function* (request) {
+        requests.push(request)
+        yield textDelta('仅对话')
+      },
+      { toolRegistry: registry }
+    )
+    const conversation = service.createConversation(null)
+    const { sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
+      sink
+    )
+    await waitFor((event) => event.type === 'completed')
+
+    expect(requests[0].tools).toBeUndefined()
+  })
+
+  it('轮数超限且收尾无文本时返回 TOOL_EXECUTION_FAILED', async () => {
+    let calls = 0
+    const service = createService(
+      async function* (request) {
+        if (request.tools) {
+          calls += 1
+          yield {
+            type: 'tool_call',
+            id: `call_${calls}`,
+            name: 'read_file',
+            arguments: { path: `src/${calls}.ts` }
+          }
+          return
+        }
+      },
+      {
+        toolRegistry: createToolRegistry(async () => ({
+          content: 'ok',
+          summary: 'ok',
+          truncated: false
+        })),
+        locateRepository: () => ({ name: 'demo-repo' }),
+        agentLimits: { maxRounds: 1 }
+      }
+    )
+    const conversation = service.createConversation('repo-1')
+    const { sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
+      sink
+    )
+    const error = await waitFor((event) => event.type === 'error')
+
+    expect(error.type).toBe('error')
+    if (error.type === 'error') {
+      expect(error.code).toBe('TOOL_EXECUTION_FAILED')
+    }
+    expect(store.listMessages(conversation.id).map((message) => message.role)).toEqual(['user'])
+  })
+
+  it('工具错误不会终止对话，记录为 error 后继续回答', async () => {
+    let round = 0
+    const service = createService(
+      async function* (request) {
+        if (request.tools && round === 0) {
+          round += 1
+          yield { type: 'tool_call', id: 'call_1', name: 'read_file', arguments: { path: 'a.ts' } }
+          return
+        }
+        yield textDelta('文件不存在，我可以先看目录。')
+      },
+      {
+        toolRegistry: createToolRegistry(async () => {
+          throw new ToolExecutionError('FILE_NOT_FOUND', '文件不存在或不可访问')
+        }),
+        locateRepository: () => ({ name: 'demo-repo' })
+      }
+    )
+    const conversation = service.createConversation('repo-1')
+    const { sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '读取 a.ts' },
+      sink
+    )
+    const completed = await waitFor((event) => event.type === 'completed')
+
+    expect(completed.type).toBe('completed')
+    if (completed.type === 'completed') {
+      expect(completed.assistantMessage.toolCalls?.[0]).toMatchObject({
+        status: 'error',
+        summary: '文件不存在或不可访问'
+      })
+    }
   })
 })
 

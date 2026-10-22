@@ -71,6 +71,10 @@ const MIGRATIONS: readonly Migration[] = [
 
       CREATE INDEX idx_file_edits_session ON file_edits(edit_session_id);
     `)
+  },
+  (db) => {
+    // v2：为 assistant 消息保存工具调用摘要，供重新加载后展示；不保存工具输出正文。
+    db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT;')
   }
 ]
 

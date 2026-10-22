@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChatDotRound, DocumentCopy, FolderAdd, FolderOpened } from '@element-plus/icons-vue'
+import { ChatDotRound, DocumentCopy, FolderAdd, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { onBeforeRouteLeave } from 'vue-router'
 import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
-import EmptyState from '@renderer/components/common/EmptyState.vue'
+import ChatPanel from '@renderer/components/chat/ChatPanel.vue'
 import DiffPanel from '@renderer/components/diff/DiffPanel.vue'
 import EditorArea from '@renderer/components/editor/EditorArea.vue'
 import FileTree from '@renderer/components/repository/FileTree.vue'
 import { desktopApi } from '@renderer/services/desktop-api'
+import { useChatStore } from '@renderer/stores/chat'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
 import { toErrorMessage } from '@renderer/utils/errors'
 
 const repository = useRepositoryStore()
 const workspace = useWorkspaceStore()
+const chat = useChatStore()
 
 const {
   repositories,
@@ -27,6 +29,7 @@ const {
   gitChangeCount
 } = storeToRefs(repository)
 const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
+const { conversations, activeConversationId, isCreatingConversation } = storeToRefs(chat)
 
 const selecting = ref(false)
 const selectError = ref<string | null>(null)
@@ -141,6 +144,22 @@ async function handleOpenFile(relativePath: string): Promise<void> {
   }
 }
 
+async function handleNewConversation(): Promise<void> {
+  try {
+    await chat.createConversation(activeRepository.value?.id ?? null)
+  } catch (error) {
+    chat.setError(toErrorMessage(error))
+  }
+}
+
+async function handleSelectConversation(id: string): Promise<void> {
+  try {
+    await chat.selectConversation(id)
+  } catch (error) {
+    chat.setError(toErrorMessage(error))
+  }
+}
+
 onBeforeRouteLeave(async () => {
   if (!workspace.hasDirtyFiles) return true
   if (!(await confirmDiscardUnsaved('离开工作区'))) return false
@@ -151,6 +170,7 @@ onBeforeRouteLeave(async () => {
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  void chat.initialize()
   void (async () => {
     try {
       const summaries = await desktopApi.repository.list()
@@ -277,21 +297,38 @@ onBeforeUnmount(() => {
         <aside v-if="rightPanelVisible" class="ai-panel">
           <header class="ai-panel-header">
             <span>AI 助手</span>
-            <el-button text size="small" @click="workspace.toggleRightPanel()">收起</el-button>
+            <div class="ai-panel-actions">
+              <el-select
+                v-if="conversations.length > 0"
+                v-model="activeConversationId"
+                class="conversation-select"
+                size="small"
+                placeholder="选择会话"
+                @change="handleSelectConversation"
+              >
+                <el-option
+                  v-for="conversation in conversations"
+                  :key="conversation.id"
+                  :label="conversation.title"
+                  :value="conversation.id"
+                />
+              </el-select>
+              <el-tooltip content="新建会话" placement="bottom">
+                <el-button
+                  text
+                  size="small"
+                  aria-label="新建会话"
+                  :icon="Plus"
+                  :loading="isCreatingConversation"
+                  @click="handleNewConversation"
+                />
+              </el-tooltip>
+              <el-button text size="small" @click="workspace.toggleRightPanel()">收起</el-button>
+            </div>
           </header>
 
           <div class="ai-panel-body">
-            <EmptyState
-              :icon="ChatDotRound"
-              title="工作区 AI 助手"
-              description="选择仓库后，可在这里基于当前代码上下文提问；模型调用将在阶段 4 接通。"
-            >
-              <router-link class="text-link" :to="{ name: 'settings' }">打开设置</router-link>
-            </EmptyState>
-          </div>
-
-          <div class="ai-panel-footer">
-            <el-input size="small" disabled placeholder="AI 助手将在阶段 4 接入" />
+            <ChatPanel compact :repository-id="activeRepository?.id ?? null" />
           </div>
         </aside>
       </div>
@@ -464,28 +501,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.ai-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.conversation-select {
+  width: 118px;
+}
+
 .ai-panel-body {
   display: flex;
   flex: 1;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   min-height: 0;
-  padding: 16px;
-}
-
-.ai-panel-footer {
-  padding: 12px 14px;
-  border-top: 1px solid var(--dp-border);
-}
-
-.text-link {
-  color: var(--dp-accent);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.text-link:hover {
-  text-decoration: underline;
 }
 
 @media (max-width: 1280px) {

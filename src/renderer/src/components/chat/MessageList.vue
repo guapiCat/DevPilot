@@ -2,6 +2,7 @@
 import { ChatLineRound } from '@element-plus/icons-vue'
 import type { ChatMessage } from '@shared/types/chat'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
+import ToolCallList from './ToolCallList.vue'
 
 withDefaults(
   defineProps<{
@@ -23,10 +24,8 @@ const emit = defineEmits<{
       v-if="messages.length === 0"
       :icon="ChatLineRound"
       title="开始一次研发对话"
-      description="当前版本的 AI 只根据对话历史回答，不会读取或修改仓库文件；回答内容会发送到所配置的云端模型。"
-    >
-      <div class="stage-note">文件上下文与工具调用将在阶段 5 接入</div>
-    </EmptyState>
+      description="AI 可只读浏览当前关联仓库中的少量文件与搜索片段，内容会发送到所配置的云端模型；不会修改文件或执行命令。"
+    />
 
     <template v-else>
       <article
@@ -40,8 +39,13 @@ const emit = defineEmits<{
           <span v-if="message.status === 'cancelled'" class="status-tag">已停止</span>
           <span v-else-if="message.status === 'error'" class="status-tag danger">生成失败</span>
         </header>
+        <ToolCallList
+          v-if="message.role !== 'user' && message.toolCalls?.length"
+          :calls="message.toolCalls"
+        />
         <p v-if="message.content">{{ message.content }}</p>
         <p v-else-if="message.status === 'cancelled'" class="placeholder-text">已停止生成</p>
+        <p v-else-if="message.toolCalls?.length" class="placeholder-text">正在调用工具…</p>
         <p v-else class="placeholder-text">正在等待回复…</p>
       </article>
 
@@ -64,14 +68,6 @@ const emit = defineEmits<{
   flex: 1;
   min-height: 0;
   overflow: auto;
-}
-
-.stage-note {
-  padding: 6px 12px;
-  border: 1px solid var(--dp-border);
-  border-radius: 999px;
-  color: var(--dp-text-muted);
-  font-size: 11.5px;
 }
 
 .message {

@@ -167,6 +167,58 @@ describe('ChatStore 会话', () => {
     expect(recent.map((item) => item.content)).toEqual(['消息 2', '消息 3', '消息 4'])
   })
 
+  it('assistant 消息保存工具调用摘要并可恢复', () => {
+    const conversationId = '11111111-1111-4111-8111-111111111111'
+    insertConversation(store, conversationId, 'demo', '2026-10-01T00:00:00.000Z')
+
+    const toolCalls = [
+      {
+        id: 'call_1',
+        name: 'read_file',
+        argumentsSummary: 'src/a.ts:1-10',
+        status: 'success' as const,
+        summary: '读取 10/20 行',
+        durationMs: 12
+      }
+    ]
+    const message = store.appendAssistantMessage(
+      conversationId,
+      '回答',
+      '2026-10-01T00:00:01.000Z',
+      toolCalls
+    )
+
+    expect(message.toolCalls).toEqual(toolCalls)
+    expect(store.listMessages(conversationId)[0].toolCalls).toEqual(toolCalls)
+    expect(store.listRecentMessages(conversationId, 5)[0].toolCalls).toEqual(toolCalls)
+  })
+
+  it('没有工具调用时不写入 tool_calls', () => {
+    const conversationId = '11111111-1111-4111-8111-111111111111'
+    insertConversation(store, conversationId, 'demo', '2026-10-01T00:00:00.000Z')
+
+    const message = store.appendAssistantMessage(conversationId, '回答', '2026-10-01T00:00:01.000Z')
+
+    expect(message.toolCalls).toBeUndefined()
+    expect(
+      db
+        .prepare<[string], { tool_calls: string | null }>(
+          'SELECT tool_calls FROM messages WHERE id = ?'
+        )
+        .get(message.id)
+    ).toEqual({ tool_calls: null })
+  })
+
+  it('损坏的 tool_calls JSON 降级为 undefined', () => {
+    const conversationId = '11111111-1111-4111-8111-111111111111'
+    insertConversation(store, conversationId, 'demo', '2026-10-01T00:00:00.000Z')
+
+    const message = store.appendAssistantMessage(conversationId, '回答', '2026-10-01T00:00:01.000Z')
+    db.prepare('UPDATE messages SET tool_calls = ? WHERE id = ?').run('{broken', message.id)
+
+    expect(store.listMessages(conversationId)[0].toolCalls).toBeUndefined()
+  })
+
   it('跨重启保留会话与消息', async () => {
     insertConversation(
       store,

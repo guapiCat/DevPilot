@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { DEFAULT_CONVERSATION_TITLE, MAX_CONVERSATION_TITLE_LENGTH } from '@shared/constants/app'
+import { toolCallsSchema } from '@shared/schemas/tool'
 import type { ChatMessage, ChatRole, Conversation } from '@shared/types/chat'
+import type { ToolCallRecord } from '@shared/types/tool'
 
 export interface ConversationRecord {
   id: string
@@ -25,6 +27,7 @@ interface MessageRow {
   role: string
   content: string
   created_at: string
+  tool_calls: string | null
 }
 
 function toConversation(row: ConversationRow): Conversation {
@@ -37,12 +40,24 @@ function toConversation(row: ConversationRow): Conversation {
   }
 }
 
+function parseToolCalls(value: string | null): ToolCallRecord[] | undefined {
+  if (!value) return undefined
+
+  try {
+    const parsed = toolCallsSchema.safeParse(JSON.parse(value))
+    return parsed.success && parsed.data.length > 0 ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function toMessage(row: MessageRow): ChatMessage {
   return {
     id: row.id,
     role: row.role as ChatRole,
     content: row.content,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    toolCalls: parseToolCalls(row.tool_calls)
   }
 }
 
@@ -99,7 +114,7 @@ export class ChatStore {
   listMessages(conversationId: string): ChatMessage[] {
     const rows = this.db
       .prepare<[string], MessageRow>(
-        `SELECT id, conversation_id, role, content, created_at
+        `SELECT id, conversation_id, role, content, created_at, tool_calls
          FROM messages
          WHERE conversation_id = ?
          ORDER BY created_at, rowid`
@@ -112,7 +127,7 @@ export class ChatStore {
   listRecentMessages(conversationId: string, limit: number): ChatMessage[] {
     const rows = this.db
       .prepare<[string, number], MessageRow>(
-        `SELECT id, conversation_id, role, content, created_at
+        `SELECT id, conversation_id, role, content, created_at, tool_calls
          FROM messages
          WHERE conversation_id = ?
          ORDER BY created_at DESC, rowid DESC
@@ -142,29 +157,37 @@ export class ChatStore {
     })()
   }
 
-  appendAssistantMessage(conversationId: string, content: string, createdAt: string): ChatMessage {
-    return this.insertMessage(conversationId, 'assistant', content, createdAt)
+  appendAssistantMessage(
+    conversationId: string,
+    content: string,
+    createdAt: string,
+    toolCalls: ToolCallRecord[] = []
+  ): ChatMessage {
+    return this.insertMessage(conversationId, 'assistant', content, createdAt, toolCalls)
   }
 
   private insertMessage(
     conversationId: string,
     role: ChatRole,
     content: string,
-    createdAt: string
+    createdAt: string,
+    toolCalls: ToolCallRecord[] = []
   ): ChatMessage {
+    const toolCallsJson = toolCalls.length > 0 ? JSON.stringify(toolCalls) : null
     const message: ChatMessage = {
       id: randomUUID(),
       role,
       content,
       createdAt
     }
+    if (toolCalls.length > 0) message.toolCalls = toolCalls
 
     this.db
-      .prepare<[string, string, string, string, string]>(
-        `INSERT INTO messages (id, conversation_id, role, content, created_at)
-         VALUES (?, ?, ?, ?, ?)`
+      .prepare<[string, string, string, string, string | null, string]>(
+        `INSERT INTO messages (id, conversation_id, role, content, tool_calls, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(message.id, conversationId, role, content, createdAt)
+      .run(message.id, conversationId, role, content, toolCallsJson, createdAt)
 
     this.db
       .prepare<[string, string]>('UPDATE conversations SET updated_at = ? WHERE id = ?')

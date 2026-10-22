@@ -1,11 +1,18 @@
+import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ModelEvent } from '@main/ai/model-adapter'
 import { ModelAdapterError, extractHttpStatus, toModelAdapterError } from '@main/ai/model-error'
 
 const streamMock = vi.hoisted(() => vi.fn())
+const bindToolsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@langchain/deepseek', () => ({
   ChatDeepSeek: class {
+    bindTools(...args: unknown[]): unknown {
+      bindToolsMock(...args)
+      return this
+    }
+
     stream(...args: unknown[]): unknown {
       return streamMock(...args)
     }
@@ -16,6 +23,7 @@ const { DeepSeekAdapter, normalizeContent } = await import('@main/ai/deepseek.ad
 
 beforeEach(() => {
   streamMock.mockReset()
+  bindToolsMock.mockReset()
 })
 
 describe('normalizeContent', () => {
@@ -116,6 +124,123 @@ describe('DeepSeekAdapter', () => {
     }
 
     expect(events).toEqual([{ type: 'text_delta', text: 'first' }])
+  })
+
+  it('有工具时绑定 OpenAI 风格的工具定义', async () => {
+    streamMock.mockImplementation(async function* () {
+      yield { content: 'ok' }
+    })
+
+    for await (const event of createAdapter().stream({
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: new AbortController().signal,
+      tools: [
+        {
+          name: 'read_file',
+          description: '读取文件',
+          parameters: { type: 'object', properties: { path: { type: 'string' } } }
+        }
+      ]
+    })) {
+      void event
+    }
+
+    expect(bindToolsMock).toHaveBeenCalledWith([
+      {
+        type: 'function',
+        function: {
+          name: 'read_file',
+          description: '读取文件',
+          parameters: { type: 'object', properties: { path: { type: 'string' } } }
+        }
+      }
+    ])
+  })
+
+  it('聚合流式工具调用分片并在流结束后产出完整调用', async () => {
+    streamMock.mockImplementation(async function* () {
+      yield {
+        content: '',
+        tool_call_chunks: [{ index: 0, id: 'call_1', name: 'read_file', args: '{"pa' }]
+      }
+      yield { content: '', tool_call_chunks: [{ index: 0, args: 'th":"src/a.ts"}' }] }
+      yield {
+        content: '',
+        tool_call_chunks: [
+          { index: 1, id: 'call_2', name: 'search_code', args: '{"query":"TODO"}' }
+        ]
+      }
+    })
+
+    const events: ModelEvent[] = []
+    for await (const event of createAdapter().stream({
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: new AbortController().signal,
+      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }]
+    })) {
+      events.push(event)
+    }
+
+    expect(events).toEqual([
+      { type: 'tool_call', id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } },
+      { type: 'tool_call', id: 'call_2', name: 'search_code', arguments: { query: 'TODO' } }
+    ])
+  })
+
+  it('非法参数 JSON 解析为 null，缺失 id 时生成新 id', async () => {
+    streamMock.mockImplementation(async function* () {
+      yield { content: '', tool_call_chunks: [{ index: 0, name: 'read_file', args: '{broken' }] }
+    })
+
+    const events: ModelEvent[] = []
+    for await (const event of createAdapter().stream({
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: new AbortController().signal,
+      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }]
+    })) {
+      events.push(event)
+    }
+
+    expect(events).toHaveLength(1)
+    const call = events[0]
+    expect(call.type).toBe('tool_call')
+    if (call.type !== 'tool_call') return
+    expect(call.name).toBe('read_file')
+    expect(call.arguments).toBeNull()
+    expect(call.id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('把 assistant 工具调用与 tool 结果转换为 LangChain 消息', async () => {
+    streamMock.mockImplementation(async function* () {
+      yield { content: 'done' }
+    })
+
+    for await (const event of createAdapter().stream({
+      messages: [
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } }]
+        },
+        {
+          role: 'tool',
+          content: '<tool_result>ok</tool_result>',
+          toolCallId: 'call_1',
+          toolName: 'read_file'
+        }
+      ],
+      signal: new AbortController().signal
+    })) {
+      void event
+    }
+
+    const messages = streamMock.mock.calls[0][0] as unknown[]
+    expect(messages[0]).toBeInstanceOf(AIMessage)
+    expect((messages[0] as AIMessage).tool_calls).toEqual([
+      { id: 'call_1', name: 'read_file', args: { path: 'src/a.ts' }, type: 'tool_call' }
+    ])
+    expect(messages[1]).toBeInstanceOf(ToolMessage)
+    expect((messages[1] as ToolMessage).tool_call_id).toBe('call_1')
   })
 
   it('取消时吞掉底层中止异常，其他异常转换为稳定错误', async () => {

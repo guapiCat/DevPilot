@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
-import ChatComposer from '@renderer/components/chat/ChatComposer.vue'
+import ChatPanel from '@renderer/components/chat/ChatPanel.vue'
 import ConversationList from '@renderer/components/chat/ConversationList.vue'
-import MessageList from '@renderer/components/chat/MessageList.vue'
-import { desktopApi } from '@renderer/services/desktop-api'
 import { useChatStore } from '@renderer/stores/chat'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import { toErrorMessage } from '@renderer/utils/errors'
@@ -13,32 +11,11 @@ import { toErrorMessage } from '@renderer/utils/errors'
 const chat = useChatStore()
 const repository = useRepositoryStore()
 
-const {
-  conversations,
-  activeConversationId,
-  activeMessages,
-  isGenerating,
-  isGeneratingInActiveConversation,
-  isCreatingConversation,
-  canRetry,
-  errorMessage
-} = storeToRefs(chat)
+const { conversations, activeConversationId, isCreatingConversation } = storeToRefs(chat)
 const { activeRepository } = storeToRefs(repository)
 
-const aiConfigured = ref(true)
-const aiConfigLoading = ref(true)
-
-onMounted(async () => {
+onMounted(() => {
   void chat.initialize()
-
-  try {
-    const status = await desktopApi.settings.getAiConfigStatus()
-    aiConfigured.value = status.configured
-  } catch (error) {
-    chat.setError(toErrorMessage(error))
-  } finally {
-    aiConfigLoading.value = false
-  }
 })
 
 async function handleCreate(): Promise<void> {
@@ -56,18 +33,6 @@ async function handleSelect(id: string): Promise<void> {
     chat.setError(toErrorMessage(error))
   }
 }
-
-function handleSend(content: string): void {
-  void chat.sendMessage(content, activeRepository.value?.id ?? null)
-}
-
-function handleCancel(): void {
-  void chat.cancelGeneration()
-}
-
-function handleRetry(): void {
-  void chat.retryLast()
-}
 </script>
 
 <template>
@@ -75,7 +40,9 @@ function handleRetry(): void {
     <header class="page-header">
       <div>
         <h1>研发对话</h1>
-        <p>当前版本只依据对话历史回答，不会读取仓库文件；对话内容会发送到云端模型。</p>
+        <p>
+          可读取当前关联仓库的少量文件与搜索片段，内容会发送到云端模型；工具只读，不会修改文件。
+        </p>
       </div>
 
       <router-link class="repo-chip" :to="{ name: 'workspace' }">
@@ -94,44 +61,7 @@ function handleRetry(): void {
       />
 
       <section class="chat-main">
-        <MessageList
-          :messages="activeMessages"
-          :generating="isGeneratingInActiveConversation"
-          :retryable="canRetry"
-          @retry="handleRetry"
-        />
-
-        <el-alert
-          v-if="!aiConfigLoading && !aiConfigured"
-          class="chat-error"
-          type="warning"
-          title="尚未配置 DeepSeek API Key"
-          show-icon
-          :closable="false"
-        >
-          <template #default>
-            请在
-            <router-link class="inline-link" :to="{ name: 'settings' }">设置页</router-link>
-            查看配置方式，并在修改 .env 后重启应用。
-          </template>
-        </el-alert>
-
-        <el-alert
-          v-if="errorMessage"
-          class="chat-error"
-          :title="errorMessage"
-          type="error"
-          show-icon
-          :closable="false"
-        />
-
-        <ChatComposer
-          :disabled="!aiConfigured"
-          disabled-hint="请先在设置页配置 DeepSeek API Key"
-          :generating="isGenerating"
-          @send="handleSend"
-          @cancel="handleCancel"
-        />
+        <ChatPanel :repository-id="activeRepository?.id ?? null" />
       </section>
     </div>
   </div>
@@ -202,14 +132,5 @@ function handleRetry(): void {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-}
-
-.chat-error {
-  margin: 0 24px 10px;
-}
-
-.inline-link {
-  color: var(--dp-accent);
-  text-decoration: underline;
 }
 </style>
