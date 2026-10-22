@@ -48,3 +48,11 @@
 **决策**：使用 `createWebHashHistory`。
 
 **影响**：打包与开发行为一致，无需在 Electron 中配置 history fallback；URL 中带 `#/chat` 等路径。
+
+## ADR-007：阶段 3 先做会话内仓库登记，暂不引入 SQLite 与 Monaco
+
+**背景**：阶段 3 的完整范围包括 SQLite 持久化、Monaco 与 Git status/diff。先打通“选择真实仓库、浏览文件”可以尽早验证路径安全与 IPC 链路。
+
+**决策**：本次实现仓库选择、会话内登记/切换、文件树与只读文件查看。仓库登记只保存在主进程内存中；不引入 better-sqlite3，不接入 Monaco 与 Git 命令。
+
+**影响**：重启应用后需重新选择仓库；代码只读、无语法高亮与 Git 变更视图。SQLite 原生模块 ABI 与打包验证留待后续增量。错误码新增 `FILE_NOT_FOUND`、`UNSUPPORTED_FILE`。

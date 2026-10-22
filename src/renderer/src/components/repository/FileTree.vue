@@ -26,7 +26,7 @@ const emit = defineEmits<{
       compact
       :icon="FolderOpened"
       title="尚未选择仓库"
-      description="选择本地 Git 仓库后，文件树会显示在这里。"
+      description="点击上方“选择仓库”选择本地目录后，文件树会显示在这里。"
     />
 
     <ul v-else class="root">

@@ -15,6 +15,15 @@ const api: DevPilotApi = {
   },
   settings: {
     getAiConfigStatus: () => invoke(IPC_CHANNELS.settingsGetAiConfig)
+  },
+  repository: {
+    select: () => invoke(IPC_CHANNELS.repositorySelect),
+    list: () => invoke(IPC_CHANNELS.repositoryList),
+    getTree: (repositoryId) => invoke(IPC_CHANNELS.repositoryGetTree, { repositoryId })
+  },
+  file: {
+    read: (repositoryId, relativePath) =>
+      invoke(IPC_CHANNELS.fileRead, { repositoryId, relativePath })
   }
 }
 

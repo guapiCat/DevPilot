@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { FileContent } from '@shared/types/repository'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const openTabs = ref<string[]>([])
@@ -7,6 +8,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const rightPanelVisible = ref(true)
   const diffPanelVisible = ref(false)
   const selectedEditProposalId = ref<string | null>(null)
+  const fileContents = ref<Record<string, FileContent>>({})
+  const fileErrors = ref<Record<string, string>>({})
+  const fileLoadingPath = ref<string | null>(null)
 
   function openFile(relativePath: string): void {
     if (!openTabs.value.includes(relativePath)) {
@@ -38,16 +42,44 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedEditProposalId.value = id
   }
 
+  function setFileContent(relativePath: string, content: FileContent): void {
+    fileContents.value[relativePath] = content
+    delete fileErrors.value[relativePath]
+  }
+
+  function setFileError(relativePath: string, message: string): void {
+    fileErrors.value[relativePath] = message
+  }
+
+  function setFileLoadingPath(relativePath: string | null): void {
+    fileLoadingPath.value = relativePath
+  }
+
+  function resetRepositoryState(): void {
+    openTabs.value = []
+    activeFilePath.value = null
+    fileContents.value = {}
+    fileErrors.value = {}
+    fileLoadingPath.value = null
+  }
+
   return {
     openTabs,
     activeFilePath,
     rightPanelVisible,
     diffPanelVisible,
     selectedEditProposalId,
+    fileContents,
+    fileErrors,
+    fileLoadingPath,
     openFile,
     closeTab,
     toggleRightPanel,
     toggleDiffPanel,
-    selectEditProposal
+    selectEditProposal,
+    setFileContent,
+    setFileError,
+    setFileLoadingPath,
+    resetRepositoryState
   }
 })

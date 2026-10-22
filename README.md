@@ -2,8 +2,8 @@
 
 面向研发工作的 Windows 桌面智能助手。DevPilot 的目标是让开发者在本地代码仓库中通过 AI 理解代码、定位问题、提出修改，并在 Diff 审核确认后把修改应用到工作区。
 
-> 当前状态：**阶段 1–2 已完成**（工程骨架 + 基础 UI）。
-> AI 对话、仓库接入、Monaco 编辑器、Diff 审核闭环、SQLite 持久化与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
+> 当前状态：**阶段 1–2 已完成；阶段 3 已实现仓库选择、文件树与只读代码查看**。
+> SQLite 持久化、Monaco 编辑器、Git status/diff、AI 对话、Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
 > 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准。
 
 ## 已实现
@@ -11,7 +11,10 @@
 - Electron + Vue 3 + TypeScript 分层工程（Main / Preload / Renderer / Shared）。
 - 安全窗口配置：`contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`。
 - 最小化 Preload API：`window.devPilot.app.*`、`window.devPilot.settings.*`，不暴露任意 IPC channel。
-- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询，入参使用 Zod 校验。
+- 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询、仓库与文件读取，入参使用 Zod 校验。
+- 本地仓库选择与切换：系统目录对话框，会话内登记，自动识别 Git 仓库。
+- 安全文件访问：仓库 ID + 相对路径，`realpath` 规范化，拦截路径穿越、绝对路径与符号链接逃逸。
+- 文件树与只读代码查看：忽略 `.git` / `node_modules`，5000 项上限；文件读取 1 MB 上限，支持 UTF-8/BOM，拒绝二进制与非法编码。
 - 全局导航与三个页面：研发对话、研发工作区（IDE 三栏布局）、设置。
 - Pinia Store：`repository`、`chat`、`workspace`，承载当前 UI 状态。
 - 设置页展示模型配置状态、应用版本、Electron/Chromium/Node 版本与数据目录。
@@ -107,9 +110,10 @@ docs/            # 技术设计、开发计划、安全说明、架构决策
 ## 已知限制
 
 - 尚未接入 AI 模型、工具调用与流式输出（阶段 4–5）。
-- 尚未选择/读取本地仓库，工作区为 UI 骨架（阶段 3）。
-- 尚未接入 Monaco、Git 状态与 Diff 审核（阶段 3 / 6）。
-- 对话与编辑会话尚未持久化（阶段 3 起）。
+- 仓库登记仅保存在当前进程内，重启应用后需重新选择；SQLite 持久化尚未实现。
+- 代码查看为只读，尚未接入 Monaco 与编辑能力（阶段 3 剩余 / 6）。
+- 尚未接入 Git status/diff 与 Diff 审核（阶段 3 剩余 / 6）。
+- 对话与编辑会话尚未持久化。
 - 尚未生成 Windows 安装包，原生模块验证未开始（阶段 7）。
 - 应用图标暂用脚手架占位图。
 - Element Plus 当前为全量引入，Renderer 产物约 2.4 MB，后续可按需引入优化。

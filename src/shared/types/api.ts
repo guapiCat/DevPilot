@@ -1,5 +1,6 @@
 import type { AiConfigStatus, AppInfo } from './app'
 import type { IpcResult } from './ipc'
+import type { FileContent, FileTreeResult, RepositorySummary } from './repository'
 
 export interface PingResponse {
   message: string
@@ -13,5 +14,13 @@ export interface DevPilotApi {
   }
   settings: {
     getAiConfigStatus(): Promise<IpcResult<AiConfigStatus>>
+  }
+  repository: {
+    select(): Promise<IpcResult<RepositorySummary | null>>
+    list(): Promise<IpcResult<RepositorySummary[]>>
+    getTree(repositoryId: string): Promise<IpcResult<FileTreeResult>>
+  }
+  file: {
+    read(repositoryId: string, relativePath: string): Promise<IpcResult<FileContent>>
   }
 }

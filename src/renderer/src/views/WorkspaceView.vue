@@ -1,33 +1,149 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { ChatDotRound, DocumentCopy, FolderAdd, FolderOpened } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
+import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 import DiffPanel from '@renderer/components/diff/DiffPanel.vue'
 import EditorArea from '@renderer/components/editor/EditorArea.vue'
 import FileTree from '@renderer/components/repository/FileTree.vue'
+import { desktopApi } from '@renderer/services/desktop-api'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
+import { toErrorMessage } from '@renderer/utils/errors'
 
 const repository = useRepositoryStore()
 const workspace = useWorkspaceStore()
 
-const { activeRepository, fileTree, fileTreeLoading } = storeToRefs(repository)
+const { repositories, activeRepository, fileTree, fileTreeLoading, fileTreeTruncated } =
+  storeToRefs(repository)
 const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
+
+const selecting = ref(false)
+const selectError = ref<string | null>(null)
+
+async function loadRepositoryTree(repositoryId: string): Promise<void> {
+  repository.setFileTreeLoading(true)
+  repository.setFileTreeTruncated(false)
+
+  try {
+    const result = await desktopApi.repository.getTree(repositoryId)
+    repository.setFileTree(result.nodes)
+    repository.setFileTreeTruncated(result.truncated)
+  } catch (error) {
+    repository.setFileTree([])
+    selectError.value = toErrorMessage(error)
+  } finally {
+    repository.setFileTreeLoading(false)
+  }
+}
+
+async function handleSelectRepository(): Promise<void> {
+  if (selecting.value) return
+
+  selecting.value = true
+  selectError.value = null
+
+  try {
+    const summary = await desktopApi.repository.select()
+    if (!summary) return
+
+    workspace.resetRepositoryState()
+    repository.setActiveRepository(summary)
+    repository.setRepositories(await desktopApi.repository.list())
+    await loadRepositoryTree(summary.id)
+  } catch (error) {
+    selectError.value = toErrorMessage(error)
+  } finally {
+    selecting.value = false
+  }
+}
+
+async function handleSwitchRepository(repositoryId: string): Promise<void> {
+  if (!repositoryId || repositoryId === activeRepository.value?.id) return
+
+  const summary = repositories.value.find((item) => item.id === repositoryId)
+  if (!summary) return
+
+  selectError.value = null
+  workspace.resetRepositoryState()
+  repository.setActiveRepository(summary)
+  await loadRepositoryTree(summary.id)
+}
+
+async function handleOpenFile(relativePath: string): Promise<void> {
+  const currentRepository = activeRepository.value
+  if (!currentRepository) return
+
+  workspace.openFile(relativePath)
+
+  if (workspace.fileContents[relativePath] || workspace.fileErrors[relativePath]) return
+
+  workspace.setFileLoadingPath(relativePath)
+
+  try {
+    const content = await desktopApi.file.read(currentRepository.id, relativePath)
+    workspace.setFileContent(relativePath, content)
+  } catch (error) {
+    workspace.setFileError(relativePath, toErrorMessage(error))
+  } finally {
+    if (workspace.fileLoadingPath === relativePath) {
+      workspace.setFileLoadingPath(null)
+    }
+  }
+}
+
+onMounted(() => {
+  void (async () => {
+    try {
+      repository.setRepositories(await desktopApi.repository.list())
+    } catch (error) {
+      selectError.value = toErrorMessage(error)
+    }
+  })()
+})
 </script>
 
 <template>
   <div class="workspace-view">
     <header class="workspace-toolbar">
-      <div class="repo-badge">
+      <div class="repo-badge" :title="activeRepository?.path">
         <el-icon :size="15"><FolderOpened /></el-icon>
         <span>{{ activeRepository?.name ?? '未选择仓库' }}</span>
+        <el-tag
+          v-if="activeRepository && !activeRepository.isGitRepository"
+          size="small"
+          type="warning"
+          effect="plain"
+        >
+          非 Git
+        </el-tag>
       </div>
 
-      <el-tooltip content="仓库选择将在阶段 3 接入" placement="bottom">
-        <span class="tooltip-wrap">
-          <el-button size="small" :icon="FolderAdd" disabled>选择仓库</el-button>
-        </span>
-      </el-tooltip>
+      <el-select
+        v-if="repositories.length > 0"
+        class="repo-switcher"
+        size="small"
+        :model-value="activeRepository?.id"
+        placeholder="切换仓库"
+        @change="handleSwitchRepository"
+      >
+        <el-option
+          v-for="repo in repositories"
+          :key="repo.id"
+          :label="repo.name"
+          :value="repo.id"
+        />
+      </el-select>
+
+      <el-button
+        size="small"
+        :icon="FolderAdd"
+        :loading="selecting"
+        @click="handleSelectRepository"
+      >
+        选择仓库
+      </el-button>
 
       <div class="toolbar-spacer"></div>
 
@@ -59,7 +175,23 @@ const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
             <span v-if="activeRepository" class="repo-leaf">{{ activeRepository.name }}</span>
           </div>
           <div class="explorer-body">
-            <FileTree :nodes="fileTree" :loading="fileTreeLoading" @open="workspace.openFile" />
+            <el-alert
+              v-if="selectError"
+              class="repo-error"
+              :title="selectError"
+              type="error"
+              show-icon
+              :closable="false"
+            />
+            <el-alert
+              v-if="fileTreeTruncated"
+              class="repo-error"
+              :title="`文件树超过 ${MAX_FILE_TREE_ENTRIES} 项，已截断显示`"
+              type="warning"
+              show-icon
+              :closable="false"
+            />
+            <FileTree :nodes="fileTree" :loading="fileTreeLoading" @open="handleOpenFile" />
           </div>
         </aside>
 
@@ -75,7 +207,7 @@ const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
             <EmptyState
               :icon="ChatDotRound"
               title="工作区 AI 助手"
-              description="完成仓库接入（阶段 3）与模型配置后，可在这里基于当前代码上下文提问。"
+              description="选择仓库后，可在这里基于当前代码上下文提问；模型调用将在阶段 4 接通。"
             >
               <router-link class="text-link" :to="{ name: 'settings' }">打开设置</router-link>
             </EmptyState>
@@ -122,8 +254,13 @@ const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
   font-size: 12.5px;
 }
 
-.tooltip-wrap {
-  display: inline-flex;
+.repo-switcher {
+  width: 150px;
+}
+
+.repo-error {
+  margin: 10px 12px;
+  width: auto;
 }
 
 .toolbar-spacer {
