@@ -68,6 +68,20 @@ export interface AgentRunResult {
 class ToolTimeoutError extends Error {}
 class RunAbortedError extends Error {}
 
+// 模型在无法调用工具时，可能把原生工具调用格式（DeepSeek DSML）当正文输出。
+const DSML_MARKER = String.raw`(?:｜｜DSML｜｜|\|\|DSML\|\||\|DSML\|)`
+const DSML_BLOCK_RE = new RegExp(String.raw`<${DSML_MARKER}[\s\S]*?<\/${DSML_MARKER}\s*calls>`, 'g')
+const DSML_TAG_RE = new RegExp(String.raw`<\/?${DSML_MARKER}[^>]*>`, 'g')
+
+export function stripToolCallMarkup(text: string): string {
+  if (!/DSML/i.test(text)) return text
+  return text
+    .replace(DSML_BLOCK_RE, '')
+    .replace(DSML_TAG_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 interface ToolOutcome {
   status: ToolCallStatus
   summary: string
@@ -223,7 +237,11 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
       break
     }
 
-    messages.push({ role: 'assistant', content: roundText, toolCalls: roundCalls })
+    messages.push({
+      role: 'assistant',
+      content: stripToolCallMarkup(roundText),
+      toolCalls: roundCalls
+    })
     round += 1
 
     for (let index = 0; index < roundCalls.length; index += 1) {
@@ -306,8 +324,20 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
       // 达到工具轮数/调用上限后，用一轮不传工具的收尾调用生成最终回答。
       roundLimitReached = true
       toolsEnabled = false
+      messages.push({
+        role: 'system',
+        content:
+          '工具调用已结束（达到轮数或次数上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答。'
+      })
     }
   }
 
-  return { text, answerText, toolCalls, usage, stopped, roundLimitReached }
+  return {
+    text: stripToolCallMarkup(text),
+    answerText: stripToolCallMarkup(answerText),
+    toolCalls,
+    usage,
+    stopped,
+    roundLimitReached
+  }
 }

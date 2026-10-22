@@ -15,6 +15,7 @@ import { isSafeRelativePath } from '@shared/utils/path'
 import { repositoryService } from '@main/services/repository.service'
 import { toToolError } from './errors'
 import { capText, clampText, toPosixRelative } from './output'
+import { normalizeToolPath } from './path-args'
 import { isSensitivePath, redactSecretSnippet } from './sensitive'
 import { ToolExecutionError, type ToolDefinition } from './tool-registry'
 
@@ -222,10 +223,11 @@ export function createSearchCodeTool(
   return {
     name: 'search_code',
     description:
-      '使用 ripgrep 在当前仓库中搜索文本或正则表达式，返回文件名、行号和匹配片段。path 限定搜索目录（默认整个仓库），mode 为 literal（默认）或 regex。结果有数量上限，可能被截断。',
+      '使用 ripgrep 在当前仓库中搜索文本或正则表达式，返回文件名、行号和匹配片段。path 限定搜索目录（默认为整个仓库，使用 POSIX 相对路径，不要传绝对路径），mode 为 literal（默认）或 regex。结果有数量上限，可能被截断。',
     schema,
     summarizeArgs: (args) => {
-      const scope = args.path ? ` @ ${toPosixRelative(args.path)}` : ''
+      const path = normalizeToolPath(args.path)
+      const scope = path ? ` @ ${path}` : ''
       const mode = args.mode === 'regex' ? '（正则）' : ''
       return `"${clampText(args.query, 60)}"${mode}${scope}`
     },
@@ -234,17 +236,21 @@ export function createSearchCodeTool(
         throw new ToolExecutionError('SEARCH_FAILED', '搜索已取消')
       }
 
-      if (args.path !== undefined) {
-        if (!isSafeRelativePath(args.path)) {
-          throw new ToolExecutionError('PATH_NOT_ALLOWED', '搜索路径不在授权仓库范围内')
+      const requestedPath = normalizeToolPath(args.path)
+      if (requestedPath !== undefined) {
+        if (!isSafeRelativePath(requestedPath)) {
+          throw new ToolExecutionError(
+            'PATH_NOT_ALLOWED',
+            '搜索路径必须是仓库内的相对路径；搜索整个仓库请省略 path 参数'
+          )
         }
-        if (isSensitivePath(toPosixRelative(args.path))) {
+        if (isSensitivePath(requestedPath)) {
           throw new ToolExecutionError('SENSITIVE_FILE', '该路径被识别为敏感目录，禁止搜索')
         }
       }
 
       const root = repositories.getRealRoot(context.repositoryId)
-      const scope = args.path ? toPosixRelative(args.path) : '.'
+      const scope = requestedPath ?? '.'
       const mode = args.mode ?? 'literal'
 
       let result: { stdout: string; exitCode: number }

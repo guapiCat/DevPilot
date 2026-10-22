@@ -7,7 +7,8 @@ import {
 import type { FileContent } from '@shared/types/repository'
 import { fileService } from '@main/services/file.service'
 import { toToolError } from './errors'
-import { capText, toPosixRelative } from './output'
+import { capText } from './output'
+import { normalizeToolPath } from './path-args'
 import { containsHighRiskSecret, isSensitivePath } from './sensitive'
 import { ToolExecutionError, type ToolDefinition } from './tool-registry'
 
@@ -31,17 +32,24 @@ export function createReadFileTool(files: FileReader = fileService): ToolDefinit
   return {
     name: 'read_file',
     description:
-      '读取当前仓库中一个 UTF-8 文本文件的内容，返回带行号的代码。可用 startLine/endLine 指定行区间（单次最多 ' +
+      '读取当前仓库中一个 UTF-8 文本文件的内容，返回带行号的代码。path 为仓库内的 POSIX 相对路径，不要传绝对路径。可用 startLine/endLine 指定行区间（单次最多 ' +
       `${MAX_TOOL_READ_LINES} 行）。.env、私钥、证书、凭证等敏感文件会被拒绝。`,
     schema,
     summarizeArgs: (args) => {
+      const path = normalizeToolPath(args.path) ?? args.path
       if (args.startLine === undefined && args.endLine === undefined) {
-        return toPosixRelative(args.path)
+        return path
       }
-      return `${toPosixRelative(args.path)}（第 ${args.startLine ?? 1}-${args.endLine ?? '末'} 行）`
+      return `${path}（第 ${args.startLine ?? 1}-${args.endLine ?? '末'} 行）`
     },
     async execute(args, context) {
-      const relativePath = toPosixRelative(args.path)
+      const relativePath = normalizeToolPath(args.path)
+      if (!relativePath) {
+        throw new ToolExecutionError(
+          'INVALID_ARGUMENTS',
+          '请提供仓库内的相对文件路径，根目录不能作为文件读取'
+        )
+      }
 
       if (isSensitivePath(relativePath)) {
         throw new ToolExecutionError('SENSITIVE_FILE', '该文件被识别为敏感文件，禁止读取')

@@ -84,6 +84,18 @@ describe('list_files 工具', () => {
     expect(scoped.content).toContain('b.ts')
   })
 
+  it('接受 . / ./ / 尾随斜杠等常见根目录与目录写法', async () => {
+    for (const path of ['.', './', '.\\', '/']) {
+      const result = await tool.execute({ path, depth: 1 }, context)
+      expect(result.content).toContain('# 目录: .（深度 1）')
+      expect(result.content).toContain('src/')
+    }
+
+    const scoped = await tool.execute({ path: 'src/', depth: 1 }, context)
+    expect(scoped.content).toContain('# 目录: src（深度 1）')
+    expect(scoped.content).toContain('main.ts')
+  })
+
   it('path 指定子目录时只列出该目录内容', async () => {
     const result = await tool.execute({ path: 'src', depth: 2 }, context)
 

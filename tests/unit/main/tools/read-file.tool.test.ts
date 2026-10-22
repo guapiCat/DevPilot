@@ -104,6 +104,23 @@ describe('read_file 工具', () => {
     expect(result.content).toContain('1: API_KEY=')
   })
 
+  it('接受 ./ 前缀与尾随斜杠', async () => {
+    const prefixed = await tool.execute({ path: './sample.ts' }, context)
+    expect(prefixed.content).toContain('# 文件: sample.ts（共 5 行）')
+
+    const trailing = await tool.execute({ path: 'sample.ts/' }, context)
+    expect(trailing.content).toContain('# 文件: sample.ts（共 5 行）')
+  })
+
+  it('根目录写法不能作为文件读取', async () => {
+    await expect(tool.execute({ path: '.' }, context)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENTS'
+    })
+    await expect(tool.execute({ path: './' }, context)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENTS'
+    })
+  })
+
   it('缺失文件与路径穿越返回稳定错误码', async () => {
     await expect(tool.execute({ path: 'missing.ts' }, context)).rejects.toMatchObject({
       code: 'FILE_NOT_FOUND'

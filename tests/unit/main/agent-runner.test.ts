@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   runAgent,
   stableStringify,
+  stripToolCallMarkup,
   type AgentRunInput,
   type AgentRunResult
 } from '@main/ai/agent-runner'
@@ -138,6 +139,23 @@ describe('stableStringify', () => {
   })
 })
 
+describe('stripToolCallMarkup', () => {
+  it('移除 DSML 调用块并保留正文', () => {
+    const raw = [
+      '结论如下。',
+      '<｜｜DSML｜｜ calls>',
+      '<｜｜DSML｜｜ invoke name="read_file">',
+      '<｜｜DSML｜｜ parameter name="path" string="true">backend/src/index.ts</｜｜DSML｜｜ parameter>',
+      '</｜｜DSML｜｜ invoke>',
+      '</｜｜DSML｜｜ calls>'
+    ].join('\n')
+
+    expect(stripToolCallMarkup(raw)).toBe('结论如下。')
+    expect(stripToolCallMarkup('<||DSML|| calls></||DSML|| calls>')).toBe('')
+    expect(stripToolCallMarkup('普通回答')).toBe('普通回答')
+  })
+})
+
 describe('runAgent', () => {
   it('无工具调用时单轮返回文本', async () => {
     const { adapter, requests } = scriptAdapter([{ text: '你好' }])
@@ -217,6 +235,32 @@ describe('runAgent', () => {
     expect(result.toolCalls).toHaveLength(2)
     expect(requests).toHaveLength(3)
     expect(requests[2].tools).toBeUndefined()
+  })
+
+  it('收尾轮只输出 DSML 调用标记时从正文中剔除，并提示模型不再调用工具', async () => {
+    const tools = createTools()
+    const dsml = [
+      '<｜｜DSML｜｜ calls>',
+      '<｜｜DSML｜｜ invoke name="read_file">',
+      '<｜｜DSML｜｜ parameter name="path" string="true">backend/src/index.ts</｜｜DSML｜｜ parameter>',
+      '</｜｜DSML｜｜ invoke>',
+      '</｜｜DSML｜｜ calls>'
+    ].join('\n')
+    const { adapter, requests } = scriptAdapter([
+      { toolCalls: [toolCall('c1', '1')] },
+      { toolCalls: [toolCall('c2', '2')] },
+      { text: `已读取部分文件。\n\n${dsml}` }
+    ])
+
+    const result = await run(adapter, tools.registry, createCallbacks(), {
+      limits: { maxRounds: 2 }
+    })
+
+    expect(result.text).toBe('已读取部分文件。')
+    expect(result.answerText).toBe('已读取部分文件。')
+    expect(result.roundLimitReached).toBe(true)
+    expect(requests[2].tools).toBeUndefined()
+    expect(requests[2].messages.at(-1)).toMatchObject({ role: 'system' })
   })
 
   it('收尾轮返回文本时即使达到轮数上限也算成功', async () => {

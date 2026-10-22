@@ -154,6 +154,13 @@ describe.skipIf(!rgAvailable)('search_code 工具（真实 ripgrep）', () => {
     expect(result.content).toContain('app.ts:1:')
   })
 
+  it('接受 . / ./ 与尾随斜杠写法', async () => {
+    for (const path of ['.', './', './app.ts/', 'app.ts/']) {
+      const result = await tool.execute({ query: 'TODO', path }, context)
+      expect(result.content).toContain('app.ts:1:')
+    }
+  })
+
   it('无匹配时正常返回', async () => {
     const result = await tool.execute({ query: 'NOT_FOUND_ANYWHERE' }, context)
 
@@ -180,5 +187,17 @@ describe.skipIf(rgAvailable)('search_code 缺少 ripgrep', () => {
     await expect(
       tool.execute({ query: 'x' }, { repositoryId: 'r', signal: new AbortController().signal })
     ).rejects.toMatchObject({ code: 'RG_NOT_AVAILABLE' })
+  })
+
+  it('根目录写法不会被路径校验提前拒绝', async () => {
+    const tool = createSearchCodeTool({ getRealRoot: () => process.cwd() })
+    for (const path of ['.', './', '/']) {
+      await expect(
+        tool.execute(
+          { query: 'x', path },
+          { repositoryId: 'r', signal: new AbortController().signal }
+        )
+      ).rejects.toMatchObject({ code: 'RG_NOT_AVAILABLE' })
+    }
   })
 })

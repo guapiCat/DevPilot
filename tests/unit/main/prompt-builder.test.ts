@@ -28,6 +28,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('search_code')
     expect(prompt).toContain('read_file')
     expect(prompt).toContain('相对路径与行号')
+    expect(prompt).toContain('省略 path 参数')
     expect(prompt).toContain('<tool_result>')
     expect(prompt).toContain('敏感文件已被阻止')
   })

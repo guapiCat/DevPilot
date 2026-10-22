@@ -13,7 +13,8 @@ import { isSafeRelativePath } from '@shared/utils/path'
 import { repositoryService } from '@main/services/repository.service'
 import { isPathInside } from '@main/utils/path-security'
 import { toToolError } from './errors'
-import { capText, toPosixRelative } from './output'
+import { capText } from './output'
+import { normalizeToolPath } from './path-args'
 import { isSensitivePath } from './sensitive'
 import { ToolExecutionError, type ToolDefinition } from './tool-registry'
 
@@ -42,7 +43,10 @@ const schema = z.strictObject({
 
 async function resolveDirectory(root: string, relativePath: string | undefined): Promise<string> {
   if (relativePath !== undefined && !isSafeRelativePath(relativePath)) {
-    throw new ToolExecutionError('PATH_NOT_ALLOWED', '目录路径不在授权仓库范围内')
+    throw new ToolExecutionError(
+      'PATH_NOT_ALLOWED',
+      '目录路径必须是仓库内的相对路径；查看根目录请省略 path 参数'
+    )
   }
 
   const candidate = relativePath ? resolve(root, ...relativePath.split(/[\\/]+/)) : root
@@ -119,14 +123,7 @@ async function walk(
     state.lines.push(`${'  '.repeat(level - 1)}${dirent.name}${isDirectory ? '/' : ''}`)
 
     if (isDirectory && level < maxDepth) {
-      await walk(
-        resolve(directory, dirent.name),
-        toPosixRelative(relativePath),
-        level + 1,
-        maxDepth,
-        state,
-        signal
-      )
+      await walk(resolve(directory, dirent.name), relativePath, level + 1, maxDepth, state, signal)
     }
   }
 }
@@ -137,15 +134,18 @@ export function createListFilesTool(
   return {
     name: 'list_files',
     description:
-      '列出当前仓库中的文件和目录（相对路径）。path 指定起始目录（默认为仓库根目录），depth 指定最大深度（1-3，默认 2）。会自动忽略 .git、node_modules、构建产物和敏感文件。',
+      '列出当前仓库中的文件和目录（相对路径）。path 指定起始目录（默认为仓库根目录，使用 POSIX 相对路径，不要传绝对路径），depth 指定最大深度（1-3，默认 2）。会自动忽略 .git、node_modules、构建产物和敏感文件。',
     schema,
-    summarizeArgs: (args) =>
-      args.path
-        ? `列出 ${args.path}（深度 ${args.depth ?? 2}）`
-        : `列出仓库根目录（深度 ${args.depth ?? 2}）`,
+    summarizeArgs: (args) => {
+      const path = normalizeToolPath(args.path)
+      return path
+        ? `列出 ${path}（深度 ${args.depth ?? 2}）`
+        : `列出仓库根目录（深度 ${args.depth ?? 2}）`
+    },
     async execute(args, context) {
       const root = repositories.getRealRoot(context.repositoryId)
-      const directory = await resolveDirectory(root, args.path)
+      const requestedPath = normalizeToolPath(args.path)
+      const directory = await resolveDirectory(root, requestedPath)
       const depth = args.depth ?? 2
       const state: WalkState = { lines: [], count: 0, truncated: false }
 
@@ -155,7 +155,7 @@ export function createListFilesTool(
         throw toToolError(error)
       }
 
-      const target = args.path ? toPosixRelative(args.path) : '.'
+      const target = requestedPath ?? '.'
       const header = `# 目录: ${target}（深度 ${depth}）`
       const body = state.lines.length > 0 ? state.lines.join('\n') : '(目录为空)'
       const capped = capText(`${header}\n${body}`, MAX_TOOL_OUTPUT_CHARS)
