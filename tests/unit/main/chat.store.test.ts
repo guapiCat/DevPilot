@@ -219,6 +219,22 @@ describe('ChatStore 会话', () => {
     expect(store.listMessages(conversationId)[0].toolCalls).toBeUndefined()
   })
 
+  it('删除会话时级联删除消息，其他会话不受影响', () => {
+    const removedId = '11111111-1111-4111-8111-111111111111'
+    const keptId = '22222222-2222-4222-8222-222222222222'
+    insertConversation(store, removedId, 'removed', '2026-10-01T00:00:00.000Z')
+    insertConversation(store, keptId, 'kept', '2026-10-02T00:00:00.000Z')
+    store.appendUserMessage(removedId, '待删除问题', '2026-10-01T00:00:01.000Z')
+    store.appendUserMessage(keptId, '保留问题', '2026-10-02T00:00:01.000Z')
+
+    store.deleteConversation(removedId)
+
+    expect(store.findConversation(removedId)).toBeUndefined()
+    expect(store.listMessages(removedId)).toEqual([])
+    expect(store.listConversations().map((item) => item.id)).toEqual([keptId])
+    expect(store.listMessages(keptId)).toHaveLength(1)
+  })
+
   it('跨重启保留会话与消息', async () => {
     insertConversation(
       store,

@@ -187,6 +187,15 @@ export class RepositoryService {
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
   }
 
+  remove(repositoryId: string): void {
+    if (!this.registry.has(repositoryId)) {
+      throw new ServiceError('REPOSITORY_NOT_FOUND', '仓库不存在或尚未登记')
+    }
+
+    this.persist(() => this.store?.delete(repositoryId))
+    this.registry.delete(repositoryId)
+  }
+
   getRealRoot(repositoryId: string): string {
     const entry = this.registry.get(repositoryId)
     if (!entry) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChatDotRound, Plus } from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, Plus } from '@element-plus/icons-vue'
 import type { Conversation } from '@shared/types/chat'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 
@@ -8,13 +8,16 @@ withDefaults(
     conversations: Conversation[]
     activeId: string | null
     creating?: boolean
+    generatingId?: string | null
+    deletingId?: string | null
   }>(),
-  { creating: false }
+  { creating: false, generatingId: null, deletingId: null }
 )
 
 const emit = defineEmits<{
   create: []
   select: [id: string]
+  remove: [id: string]
 }>()
 
 function formatTime(iso: string): string {
@@ -54,7 +57,15 @@ function formatTime(iso: string): string {
     </div>
 
     <ul v-else class="list">
-      <li v-for="conversation in conversations" :key="conversation.id">
+      <li
+        v-for="conversation in conversations"
+        :key="conversation.id"
+        class="entry-row"
+        :class="{
+          active: conversation.id === activeId,
+          deleting: conversation.id === deletingId
+        }"
+      >
         <button
           type="button"
           class="entry"
@@ -63,6 +74,16 @@ function formatTime(iso: string): string {
         >
           <span class="entry-title">{{ conversation.title }}</span>
           <span class="entry-time">{{ formatTime(conversation.updatedAt) }}</span>
+        </button>
+        <button
+          type="button"
+          class="entry-remove"
+          :disabled="conversation.id === generatingId || conversation.id === deletingId"
+          :title="conversation.id === generatingId ? '生成中不可删除' : '删除会话（不可恢复）'"
+          :aria-label="`删除会话 ${conversation.title}`"
+          @click.stop="emit('remove', conversation.id)"
+        >
+          <el-icon :size="13"><Delete /></el-icon>
         </button>
       </li>
     </ul>
@@ -110,12 +131,22 @@ function formatTime(iso: string): string {
   margin-top: 2px;
 }
 
+.entry-row {
+  position: relative;
+  display: flex;
+}
+
+.entry-row.deleting {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 .entry {
   display: flex;
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 9px 34px 9px 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -147,5 +178,47 @@ function formatTime(iso: string): string {
 .entry-time {
   color: var(--dp-text-muted);
   font-size: 11px;
+}
+
+.entry-remove {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dp-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    opacity 0.15s;
+}
+
+.entry-row:hover .entry-remove,
+.entry-remove:focus-visible {
+  opacity: 1;
+}
+
+.entry-remove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dp-danger) 18%, transparent);
+  color: var(--dp-danger);
+}
+
+.entry-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0;
+}
+
+.entry-row:hover .entry-remove:disabled {
+  opacity: 0.35;
 }
 </style>

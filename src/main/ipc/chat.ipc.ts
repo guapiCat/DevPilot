@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '@shared/constants/app'
 import {
   chatCancelInputSchema,
   chatCreateConversationInputSchema,
+  chatDeleteConversationInputSchema,
   chatGetMessagesInputSchema,
   chatRetryInputSchema,
   chatSendInputSchema
@@ -26,6 +27,18 @@ export function registerChatIpcHandlers(): void {
 
     try {
       return ipcOk(chatService.createConversation(parsed.data.repositoryId))
+    } catch (error) {
+      return ipcErrorFrom(error)
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.chatDeleteConversation, (_event, input: unknown) => {
+    const parsed = chatDeleteConversationInputSchema.safeParse(input)
+    if (!parsed.success) return ipcFail('VALIDATION_ERROR', '会话参数不合法')
+
+    try {
+      chatService.deleteConversation(parsed.data.conversationId)
+      return ipcOk(null)
     } catch (error) {
       return ipcErrorFrom(error)
     }

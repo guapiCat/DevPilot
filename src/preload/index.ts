@@ -23,6 +23,8 @@ const api: DevPilotApi = {
     listConversations: () => invoke(IPC_CHANNELS.chatListConversations),
     createConversation: (repositoryId) =>
       invoke(IPC_CHANNELS.chatCreateConversation, { repositoryId }),
+    deleteConversation: (conversationId) =>
+      invoke(IPC_CHANNELS.chatDeleteConversation, { conversationId }),
     getMessages: (conversationId) => invoke(IPC_CHANNELS.chatGetMessages, { conversationId }),
     send: (input) => invoke(IPC_CHANNELS.chatSend, input),
     retry: (input) => invoke(IPC_CHANNELS.chatRetry, input),
@@ -36,7 +38,8 @@ const api: DevPilotApi = {
   repository: {
     select: () => invoke(IPC_CHANNELS.repositorySelect),
     list: () => invoke(IPC_CHANNELS.repositoryList),
-    getTree: (repositoryId) => invoke(IPC_CHANNELS.repositoryGetTree, { repositoryId })
+    getTree: (repositoryId) => invoke(IPC_CHANNELS.repositoryGetTree, { repositoryId }),
+    remove: (repositoryId) => invoke(IPC_CHANNELS.repositoryRemove, { repositoryId })
   },
   file: {
     read: (repositoryId, relativePath) =>

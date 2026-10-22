@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { FolderOpened } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import ChatPanel from '@renderer/components/chat/ChatPanel.vue'
 import ConversationList from '@renderer/components/chat/ConversationList.vue'
@@ -11,7 +12,13 @@ import { toErrorMessage } from '@renderer/utils/errors'
 const chat = useChatStore()
 const repository = useRepositoryStore()
 
-const { conversations, activeConversationId, isCreatingConversation } = storeToRefs(chat)
+const {
+  conversations,
+  activeConversationId,
+  isCreatingConversation,
+  generatingConversationId,
+  deletingConversationId
+} = storeToRefs(chat)
 const { activeRepository } = storeToRefs(repository)
 
 onMounted(() => {
@@ -32,6 +39,27 @@ async function handleSelect(id: string): Promise<void> {
   } catch (error) {
     chat.setError(toErrorMessage(error))
   }
+}
+
+async function handleRemove(id: string): Promise<void> {
+  const conversation = conversations.value.find((item) => item.id === id)
+  if (!conversation) return
+
+  try {
+    await ElMessageBox.confirm(
+      `删除会话“${conversation.title}”？该会话的全部消息将被永久删除，无法恢复。`,
+      '删除会话',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  await chat.deleteConversation(id)
 }
 </script>
 
@@ -56,8 +84,11 @@ async function handleSelect(id: string): Promise<void> {
         :conversations="conversations"
         :active-id="activeConversationId"
         :creating="isCreatingConversation"
+        :generating-id="generatingConversationId"
+        :deleting-id="deletingConversationId"
         @create="handleCreate"
         @select="handleSelect"
+        @remove="handleRemove"
       />
 
       <section class="chat-main">

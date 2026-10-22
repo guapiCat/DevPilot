@@ -21,6 +21,7 @@ export const useChatStore = defineStore('chat', () => {
   const errorMessage = ref<string | null>(null)
   const retryConversationId = ref<string | null>(null)
   const isCreatingConversation = ref(false)
+  const deletingConversationId = ref<string | null>(null)
   const aiConfigured = ref(true)
   const aiConfigLoading = ref(true)
   const initialized = ref(false)
@@ -262,6 +263,40 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function deleteConversation(id: string): Promise<void> {
+    if (deletingConversationId.value) return
+    if (isGenerating.value && generatingConversationId.value === id) {
+      errorMessage.value = '当前会话正在生成，请先停止生成'
+      return
+    }
+
+    deletingConversationId.value = id
+    errorMessage.value = null
+
+    try {
+      await desktopApi.chat.deleteConversation(id)
+    } catch (error) {
+      errorMessage.value = toErrorMessage(error)
+      deletingConversationId.value = null
+      return
+    }
+
+    deletingConversationId.value = null
+    delete messagesByConversation.value[id]
+
+    const remaining = conversations.value.filter((item) => item.id !== id)
+    conversations.value = remaining
+
+    if (retryConversationId.value === id) retryConversationId.value = null
+    if (activeConversationId.value !== id) return
+
+    if (remaining.length > 0) {
+      await selectConversation(remaining[0].id)
+    } else {
+      activeConversationId.value = null
+    }
+  }
+
   async function selectConversation(id: string): Promise<void> {
     selectToken += 1
     const token = selectToken
@@ -385,6 +420,7 @@ export const useChatStore = defineStore('chat', () => {
     errorMessage,
     retryConversationId,
     isCreatingConversation,
+    deletingConversationId,
     aiConfigured,
     aiConfigLoading,
     activeConversation,
@@ -396,6 +432,7 @@ export const useChatStore = defineStore('chat', () => {
     loadAiConfig,
     refreshConversations,
     createConversation,
+    deleteConversation,
     selectConversation,
     sendMessage,
     retryLast,

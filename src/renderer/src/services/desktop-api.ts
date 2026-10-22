@@ -59,6 +59,9 @@ export const desktopApi = {
     async createConversation(repositoryId: string | null): Promise<Conversation> {
       return unwrap(await window.devPilot.chat.createConversation(repositoryId))
     },
+    async deleteConversation(conversationId: string): Promise<void> {
+      unwrap(await window.devPilot.chat.deleteConversation(conversationId))
+    },
     async getMessages(conversationId: string): Promise<ChatMessage[]> {
       return unwrap(await window.devPilot.chat.getMessages(conversationId))
     },
@@ -88,6 +91,9 @@ export const desktopApi = {
     },
     async getTree(repositoryId: string): Promise<FileTreeResult> {
       return unwrap(await window.devPilot.repository.getTree(repositoryId))
+    },
+    async remove(repositoryId: string): Promise<void> {
+      unwrap(await window.devPilot.repository.remove(repositoryId))
     }
   },
   file: {

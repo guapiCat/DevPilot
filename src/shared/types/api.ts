@@ -29,6 +29,7 @@ export interface DevPilotApi {
   chat: {
     listConversations(): Promise<IpcResult<Conversation[]>>
     createConversation(repositoryId: string | null): Promise<IpcResult<Conversation>>
+    deleteConversation(conversationId: string): Promise<IpcResult<null>>
     getMessages(conversationId: string): Promise<IpcResult<ChatMessage[]>>
     send(input: {
       requestId: string
@@ -43,6 +44,7 @@ export interface DevPilotApi {
     select(): Promise<IpcResult<RepositorySummary | null>>
     list(): Promise<IpcResult<RepositorySummary[]>>
     getTree(repositoryId: string): Promise<IpcResult<FileTreeResult>>
+    remove(repositoryId: string): Promise<IpcResult<null>>
   }
   file: {
     read(repositoryId: string, relativePath: string): Promise<IpcResult<FileContent>>

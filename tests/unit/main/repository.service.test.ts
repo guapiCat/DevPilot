@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -147,6 +148,48 @@ describe('RepositoryService 持久化', () => {
 
     expect(after).not.toBe(before)
     expect(new RepositoryStore(database).list()).toHaveLength(1)
+  })
+})
+
+describe('RepositoryService.remove', () => {
+  it('仅移出登记，不删除磁盘文件', async () => {
+    const summary = await service.register(repositoryPath)
+
+    service.remove(summary.id)
+
+    expect(service.list()).toEqual([])
+    expect(existsSync(repositoryPath)).toBe(true)
+    await expect(service.getTree(summary.id)).rejects.toMatchObject({
+      code: 'REPOSITORY_NOT_FOUND'
+    })
+  })
+
+  it('删除写入数据库并在重启后保持删除', async () => {
+    const databaseDirectory = await createTempDir('devpilot-db-')
+    const database = openDatabase(databaseDirectory)
+    openDatabases.push(database)
+    const persisted = new RepositoryService()
+    persisted.initialize(new RepositoryStore(database))
+
+    const summary = await persisted.register(repositoryPath)
+    persisted.remove(summary.id)
+
+    expect(new RepositoryStore(database).list()).toEqual([])
+
+    const reopened = openDatabase(databaseDirectory)
+    openDatabases.push(reopened)
+    const restored = new RepositoryService()
+    restored.initialize(new RepositoryStore(reopened))
+    expect(restored.list()).toEqual([])
+  })
+
+  it('未登记的仓库返回 REPOSITORY_NOT_FOUND', () => {
+    try {
+      service.remove('00000000-0000-4000-8000-000000000000')
+      throw new Error('expected remove to throw')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'REPOSITORY_NOT_FOUND' })
+    }
   })
 })
 

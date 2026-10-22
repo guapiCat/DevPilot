@@ -638,6 +638,66 @@ describe('ChatService 工具循环', () => {
   })
 })
 
+describe('ChatService.deleteConversation', () => {
+  it('删除会话及其消息', async () => {
+    const service = createService(async function* () {
+      yield textDelta('回答')
+    })
+    const conversation = service.createConversation(null)
+    const { sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
+      sink
+    )
+    await waitFor((event) => event.type === 'completed')
+
+    service.deleteConversation(conversation.id)
+
+    expect(store.findConversation(conversation.id)).toBeUndefined()
+    expect(store.listMessages(conversation.id)).toEqual([])
+    expect(service.listConversations()).toEqual([])
+  })
+
+  it('未登记的会话返回 CONVERSATION_NOT_FOUND', () => {
+    const service = createService(async function* () {
+      yield textDelta('ok')
+    })
+
+    try {
+      service.deleteConversation(crypto.randomUUID())
+      expect.unreachable('应抛出会话不存在错误')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'CONVERSATION_NOT_FOUND' })
+    }
+  })
+
+  it('生成中的会话拒绝删除', async () => {
+    const service = createService(async function* (request) {
+      yield textDelta('部分')
+      await onceAborted(request.signal)
+    })
+    const conversation = service.createConversation(null)
+    const { sink, waitFor } = createSink()
+    const requestId = crypto.randomUUID()
+
+    service.send({ requestId, conversationId: conversation.id, content: '问题' }, sink)
+    await waitFor((event) => event.type === 'text_delta')
+
+    try {
+      service.deleteConversation(conversation.id)
+      expect.unreachable('生成中不应允许删除')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'VALIDATION_ERROR' })
+    }
+
+    service.cancel(requestId)
+    await waitFor((event) => event.type === 'cancelled')
+
+    expect(store.findConversation(conversation.id)).toBeDefined()
+  })
+})
+
 describe('ChatService.testConnection', () => {
   it('成功时返回模型与耗时', async () => {
     const service = createService(async function* () {

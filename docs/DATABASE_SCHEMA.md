@@ -89,7 +89,7 @@ repositories
 
 注意：`path` 没有唯一约束；登记时的去重由应用层完成（内存 registry 做不区分大小写的路径比较）。数据层提供 `findByPath()`（`WHERE path = ? COLLATE NOCASE`）供需要时使用，当前仅由单元测试覆盖。
 
-写入路径：`RepositoryService.register()` 新目录调用 `insert`，重复登记调用 `touch` 刷新 `updated_at`。
+写入路径：`RepositoryService.register()` 新目录调用 `insert`，重复登记调用 `touch` 刷新 `updated_at`；`RepositoryService.remove()` 调用 `delete` 仅删除登记记录，不触碰磁盘文件，关联会话按外键 `SET NULL`、编辑会话级联删除。
 
 ### 4.2 conversations — 对话（阶段 4 已使用）
 
@@ -103,7 +103,7 @@ repositories
 
 索引：`idx_conversations_repository (repository_id, updated_at DESC)`。
 
-写入路径：`ChatService.createConversation()` 插入标题为“新会话”的空会话（可关联已登记仓库）；首条用户消息写入时，`ChatStore.appendUserMessage()` 在同一事务内把标题更新为消息前 30 个字符（空白折叠）；每次写入消息都会刷新 `updated_at`，列表按 `updated_at DESC, rowid DESC` 排序。
+写入路径：`ChatService.createConversation()` 插入标题为“新会话”的空会话（可关联已登记仓库）；首条用户消息写入时，`ChatStore.appendUserMessage()` 在同一事务内把标题更新为消息前 30 个字符（空白折叠）；每次写入消息都会刷新 `updated_at`，列表按 `updated_at DESC, rowid DESC` 排序。删除会话通过 `ChatService.deleteConversation()` 删除 `conversations` 行，`messages` 按外键 `ON DELETE CASCADE` 一并删除；生成中的会话被拒绝删除。
 
 ### 4.3 messages — 消息（阶段 4 已使用，阶段 5 起含工具摘要）
 

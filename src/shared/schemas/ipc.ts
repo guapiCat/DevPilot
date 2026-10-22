@@ -70,6 +70,12 @@ export const chatGetMessagesInputSchema = z.object({
 
 export type ChatGetMessagesInput = z.infer<typeof chatGetMessagesInputSchema>
 
+export const chatDeleteConversationInputSchema = z.object({
+  conversationId: conversationIdSchema
+})
+
+export type ChatDeleteConversationInput = z.infer<typeof chatDeleteConversationInputSchema>
+
 export const chatSendInputSchema = z.object({
   requestId: requestIdSchema,
   conversationId: conversationIdSchema,

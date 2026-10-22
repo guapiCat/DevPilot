@@ -30,6 +30,20 @@ export function registerRepositoryIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.repositoryList, () => ipcOk(repositoryService.list()))
 
+  ipcMain.handle(IPC_CHANNELS.repositoryRemove, (_event, input: unknown) => {
+    const parsed = repositoryIdInputSchema.safeParse(input)
+    if (!parsed.success) {
+      return ipcFail('VALIDATION_ERROR', '仓库参数不合法')
+    }
+
+    try {
+      repositoryService.remove(parsed.data.repositoryId)
+      return ipcOk(null)
+    } catch (error) {
+      return ipcErrorFrom(error)
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.repositoryGetTree, async (_event, input: unknown) => {
     const parsed = repositoryIdInputSchema.safeParse(input)
     if (!parsed.success) {

@@ -65,4 +65,8 @@ export class RepositoryStore {
       .prepare<[string, string]>('UPDATE repositories SET updated_at = ? WHERE id = ?')
       .run(updatedAt, id)
   }
+
+  delete(id: string): void {
+    this.db.prepare<[string]>('DELETE FROM repositories WHERE id = ?').run(id)
+  }
 }

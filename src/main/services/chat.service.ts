@@ -119,6 +119,21 @@ export class ChatService {
     return store.listMessages(conversationId)
   }
 
+  deleteConversation(conversationId: string): void {
+    const store = this.requireStore()
+    this.requireConversation(conversationId)
+
+    if (this.activeRun?.conversationId === conversationId) {
+      throw new ServiceError('VALIDATION_ERROR', '当前会话正在生成，请先停止生成')
+    }
+
+    try {
+      store.deleteConversation(conversationId)
+    } catch {
+      throw new ServiceError('DATABASE_ERROR', '会话删除失败，请稍后重试')
+    }
+  }
+
   send(input: SendChatInput, sink: ChatEventSink): SendChatResult {
     const store = this.requireStore()
     this.assertStartable(input.requestId)

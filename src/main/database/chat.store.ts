@@ -111,6 +111,10 @@ export class ChatStore {
     }
   }
 
+  deleteConversation(id: string): void {
+    this.db.prepare<[string]>('DELETE FROM conversations WHERE id = ?').run(id)
+  }
+
   listMessages(conversationId: string): ChatMessage[] {
     const rows = this.db
       .prepare<[string], MessageRow>(

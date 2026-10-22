@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChatDotRound, DocumentCopy, FolderAdd, FolderOpened, Plus } from '@element-plus/icons-vue'
+import {
+  ChatDotRound,
+  Delete,
+  DocumentCopy,
+  FolderAdd,
+  FolderOpened,
+  Plus
+} from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { onBeforeRouteLeave } from 'vue-router'
 import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
+import type { RepositorySummary } from '@shared/types/repository'
 import ChatPanel from '@renderer/components/chat/ChatPanel.vue'
 import DiffPanel from '@renderer/components/diff/DiffPanel.vue'
 import EditorArea from '@renderer/components/editor/EditorArea.vue'
@@ -33,6 +41,7 @@ const { conversations, activeConversationId, isCreatingConversation } = storeToR
 
 const selecting = ref(false)
 const selectError = ref<string | null>(null)
+const removingRepositoryId = ref<string | null>(null)
 const selectedRepositoryId = ref<string | undefined>(activeRepository.value?.id)
 
 watch(activeRepository, (repo) => {
@@ -120,6 +129,56 @@ async function handleSwitchRepository(repositoryId: string): Promise<void> {
   repository.setActiveRepository(summary)
   await loadRepositoryTree(summary.id)
   void repository.refreshGitStatus()
+}
+
+async function handleRemoveRepository(repo: RepositorySummary): Promise<void> {
+  if (removingRepositoryId.value) return
+  const isActive = activeRepository.value?.id === repo.id
+  const suffix = '仅移出应用列表，不会删除磁盘文件；关联的历史会话会保留。'
+
+  try {
+    await ElMessageBox.confirm(
+      isActive && workspace.hasDirtyFiles
+        ? `有未保存的文件修改，将“${repo.name}”移出仓库列表会丢失这些修改。${suffix}`
+        : `将“${repo.name}”移出仓库列表？${suffix}`,
+      '移出仓库',
+      {
+        confirmButtonText: '移出',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  removingRepositoryId.value = repo.id
+  selectError.value = null
+
+  try {
+    await desktopApi.repository.remove(repo.id)
+  } catch (error) {
+    selectError.value = toErrorMessage(error)
+    removingRepositoryId.value = null
+    return
+  }
+
+  const summaries = repositories.value.filter((item) => item.id !== repo.id)
+  repository.setRepositories(summaries)
+
+  if (isActive) {
+    workspace.resetRepositoryState()
+    const next = summaries[0] ?? null
+    repository.setActiveRepository(next)
+    selectedRepositoryId.value = next?.id
+    if (next) {
+      await loadRepositoryTree(next.id)
+      void repository.refreshGitStatus()
+    }
+  }
+
+  removingRepositoryId.value = null
+  void chat.refreshConversations()
 }
 
 async function handleOpenFile(relativePath: string): Promise<void> {
@@ -225,12 +284,22 @@ onBeforeUnmount(() => {
         placeholder="切换仓库"
         @change="handleSwitchRepository"
       >
-        <el-option
-          v-for="repo in repositories"
-          :key="repo.id"
-          :label="repo.name"
-          :value="repo.id"
-        />
+        <el-option v-for="repo in repositories" :key="repo.id" :label="repo.name" :value="repo.id">
+          <span class="repo-option">
+            <span class="repo-option-name">{{ repo.name }}</span>
+            <button
+              type="button"
+              class="repo-option-remove"
+              :class="{ busy: removingRepositoryId === repo.id }"
+              title="移出仓库列表（不删除磁盘文件）"
+              :aria-label="`移出仓库 ${repo.name}`"
+              @mousedown.stop.prevent
+              @click.stop.prevent="handleRemoveRepository(repo)"
+            >
+              <el-icon :size="13"><Delete /></el-icon>
+            </button>
+          </span>
+        </el-option>
       </el-select>
 
       <el-button
@@ -386,7 +455,55 @@ onBeforeUnmount(() => {
 }
 
 .repo-switcher {
-  width: 150px;
+  width: 170px;
+}
+
+.repo-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.repo-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-option-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dp-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    opacity 0.15s;
+}
+
+.repo-option:hover .repo-option-remove,
+.repo-option-remove:focus-visible {
+  opacity: 1;
+}
+
+.repo-option-remove:hover {
+  background: color-mix(in srgb, var(--dp-danger) 18%, transparent);
+  color: var(--dp-danger);
+}
+
+.repo-option-remove.busy {
+  pointer-events: none;
+  opacity: 0.4;
 }
 
 .repo-error {
