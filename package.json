@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "better-sqlite3": "^13.0.3",
     "element-plus": "^2.14.7",
     "monaco-editor": "^0.57.0",
     "pinia": "^3.0.4",
@@ -38,6 +39,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",
     "@electron-toolkit/eslint-config-ts": "^4.0.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
     "@vitejs/plugin-vue": "^6.0.10",
     "electron": "^44.7.2",

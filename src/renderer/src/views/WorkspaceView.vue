@@ -153,8 +153,15 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   void (async () => {
     try {
-      repository.setRepositories(await desktopApi.repository.list())
-      if (activeRepository.value) {
+      const summaries = await desktopApi.repository.list()
+      repository.setRepositories(summaries)
+
+      // 持久化的最近仓库在重新进入工作区时自动恢复。
+      if (!activeRepository.value && summaries.length > 0) {
+        repository.setActiveRepository(summaries[0])
+        await loadRepositoryTree(summaries[0].id)
+        void repository.refreshGitStatus()
+      } else if (activeRepository.value) {
         void repository.refreshGitStatus()
       }
     } catch (error) {

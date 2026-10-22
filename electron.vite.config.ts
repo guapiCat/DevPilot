@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { defineConfig } from 'electron-vite'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
 
 const sharedAlias = {
@@ -8,6 +8,7 @@ const sharedAlias = {
 
 export default defineConfig({
   main: {
+    plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: sharedAlias
     }

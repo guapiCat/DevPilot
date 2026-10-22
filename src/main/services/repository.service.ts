@@ -10,6 +10,7 @@ import {
 } from '@shared/constants/app'
 import type { FileTreeNode, FileTreeResult, RepositorySummary } from '@shared/types/repository'
 import { isSafeRelativePath } from '@shared/utils/path'
+import type { RepositoryStore } from '../database/repository.store'
 import { isPathInside } from '../utils/path-security'
 import { ServiceError } from '../utils/service-error'
 
@@ -97,6 +98,36 @@ async function buildFileTree(root: string): Promise<TreeBuildResult> {
 
 export class RepositoryService {
   private readonly registry = new Map<string, RegisteredRepository>()
+  private store: RepositoryStore | null = null
+
+  initialize(store: RepositoryStore): void {
+    this.store = store
+    this.registry.clear()
+
+    for (const record of store.list()) {
+      this.registry.set(record.id, {
+        summary: {
+          id: record.id,
+          name: record.name,
+          path: record.path,
+          isGitRepository: existsSync(join(record.path, '.git')),
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt
+        },
+        realRoot: record.path
+      })
+    }
+  }
+
+  private persist(action: () => void): void {
+    if (!this.store) return
+
+    try {
+      action()
+    } catch {
+      throw new ServiceError('DATABASE_ERROR', '仓库信息保存失败，请稍后重试')
+    }
+  }
 
   async register(rootPath: string): Promise<RepositorySummary> {
     let realRoot: string
@@ -119,7 +150,9 @@ export class RepositoryService {
 
     for (const entry of this.registry.values()) {
       if (samePath(entry.realRoot, realRoot)) {
-        entry.summary.updatedAt = new Date().toISOString()
+        const updatedAt = new Date().toISOString()
+        this.persist(() => this.store?.touch(entry.summary.id, updatedAt))
+        entry.summary.updatedAt = updatedAt
         return { ...entry.summary }
       }
     }
@@ -133,6 +166,16 @@ export class RepositoryService {
       createdAt: now,
       updatedAt: now
     }
+
+    this.persist(() =>
+      this.store?.insert({
+        id: summary.id,
+        name: summary.name,
+        path: summary.path,
+        createdAt: summary.createdAt,
+        updatedAt: summary.updatedAt
+      })
+    )
 
     this.registry.set(summary.id, { summary, realRoot })
     return { ...summary }

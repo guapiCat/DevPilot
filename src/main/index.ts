@@ -1,10 +1,14 @@
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import { join } from 'node:path'
 import icon from '../../resources/icon.png?asset'
+import { openDatabase } from './database/database'
+import { RepositoryStore } from './database/repository.store'
 import { registerIpcHandlers } from './ipc'
+import { repositoryService } from './services/repository.service'
 import { loadEnvFiles } from './utils/env'
 
 let mainWindow: BrowserWindow | null = null
+let database: ReturnType<typeof openDatabase> | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -87,6 +91,15 @@ if (!hasSingleInstanceLock) {
     ])
     console.info(`[env] 已加载 ${loadedEnvFiles.length} 个配置文件`)
 
+    try {
+      database = openDatabase(app.getPath('userData'))
+      repositoryService.initialize(new RepositoryStore(database))
+      console.info('[db] SQLite 已就绪')
+    } catch {
+      database = null
+      console.error('[db] SQLite 初始化失败，本次运行不会持久化仓库信息')
+    }
+
     registerIpcHandlers()
     createWindow()
 
@@ -99,5 +112,10 @@ if (!hasSingleInstanceLock) {
     if (process.platform !== 'darwin') {
       app.quit()
     }
+  })
+
+  app.on('will-quit', () => {
+    database?.close()
+    database = null
   })
 }

@@ -55,7 +55,7 @@
 
 **决策**：本次实现仓库选择、会话内登记/切换、文件树与只读文件查看。仓库登记只保存在主进程内存中；不引入 better-sqlite3，不接入 Monaco 与 Git 命令。
 
-**影响**：重启应用后需重新选择仓库；代码只读、无 Git 变更视图。SQLite 原生模块 ABI 与打包验证留待后续增量。错误码新增 `FILE_NOT_FOUND`、`UNSUPPORTED_FILE`。Monaco 已由 ADR-008 接入，Git 已由 ADR-010 接入，SQLite 仍暂缓。
+**影响**：重启应用后需重新选择仓库；代码只读、无 Git 变更视图。SQLite 原生模块 ABI 与打包验证留待后续增量。错误码新增 `FILE_NOT_FOUND`、`UNSUPPORTED_FILE`。Monaco 已由 ADR-008 接入，Git 已由 ADR-010 接入，SQLite 与仓库持久化由 ADR-011 接入。
 
 ## ADR-008：采用 Monaco Editor 实现只读代码查看
 
@@ -99,3 +99,20 @@
 - Renderer 的 Git UI 状态集中在 `repository` Store，使用请求令牌丢弃切换仓库后的过期响应。
 
 **影响**：运行环境必须安装 Git 并位于 PATH，未安装时返回 `GIT_NOT_AVAILABLE`。不做任何写操作；暂存、提交、分支切换与 AI Diff 审核留待后续阶段。Diff 视图为纯文本统一 Diff，Monaco Diff Editor 在阶段 6 评估。
+
+## ADR-011：使用 SQLite + better-sqlite3 做本地持久化
+
+**背景**：ADR-007 将仓库登记放在主进程内存中，重启后丢失。后续阶段还需要持久化对话、消息与编辑会话。候选方案包括 `node:sqlite`、better-sqlite3 与纯 JS 存储。应用主进程中的数据库操作都是短小、同步的查询，且本机没有 MSVC 构建环境。
+
+**决策**：
+
+- 使用 `better-sqlite3` 13（N-API 预编译二进制）。同步 API 适合主进程内的简单读写，N-API 使其在 Node 22 与 Electron 44（Node 24 / ABI 149）下加载同一份 `.node`，不需要 `electron-rebuild`。
+- 数据库文件位于 Electron `userData` 目录下的 `devpilot.db`，不写入安装目录或用户仓库。
+- 迁移由 `user_version` 管理：迁移函数只追加、不修改已发布版本，每个版本在事务中执行并递增 `user_version`。
+- 启用 `journal_mode = WAL`、`foreign_keys = ON`、`busy_timeout = 5000`。
+- 当前持久化仓库元数据；对话、消息、编辑会话与文件编辑表已建好，供阶段 4–6 使用。不保存 API Key、普通文件内容或 Git 输出。
+- 访问全部通过参数化语句；仓储层 `RepositoryStore` 承担表映射。
+- `electron-vite` 主进程启用 `externalizeDepsPlugin()`，让 `better-sqlite3` 保持为外部 `require`，避免 Rollup 处理原生 `.node`。
+- 数据库初始化失败时应用仍可启动，`RepositoryService` 退回内存模式；日志只记录失败事实，不输出路径或数据内容。
+
+**影响**：仓库列表跨启动保留，工作区启动时自动载入最近仓库。原生模块在 `electron-builder` 打包时需要 `asarUnpack` 并验证安装包内加载（阶段 7 待办）。若未来需要事务型后台任务或复杂查询，可继续在同一连接上扩展，无需更换驱动。

@@ -2,9 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type Database from 'better-sqlite3'
+import { openDatabase } from '@main/database/database'
+import { RepositoryStore } from '@main/database/repository.store'
 import { RepositoryService } from '@main/services/repository.service'
 
 const tempDirs: string[] = []
+const openDatabases: Database.Database[] = []
 let repositoryPath: string
 let service: RepositoryService
 
@@ -31,6 +35,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  for (const database of openDatabases.splice(0)) {
+    if (database.open) database.close()
+  }
   for (const directory of tempDirs.splice(0)) {
     await rm(directory, { recursive: true, force: true })
   }
@@ -88,6 +95,58 @@ describe('RepositoryService.getTree', () => {
     await expect(service.getTree(summary.id)).rejects.toMatchObject({
       code: 'REPOSITORY_NOT_FOUND'
     })
+  })
+})
+
+describe('RepositoryService 持久化', () => {
+  function openTestDatabase(directory: string): Database.Database {
+    const database = openDatabase(directory)
+    openDatabases.push(database)
+    return database
+  }
+
+  it('登记写入数据库并在重启后恢复', async () => {
+    const databaseDirectory = await createTempDir('devpilot-db-')
+    const database = openTestDatabase(databaseDirectory)
+
+    const first = new RepositoryService()
+    first.initialize(new RepositoryStore(database))
+    const summary = await first.register(repositoryPath)
+
+    expect(new RepositoryStore(database).findByPath(summary.path)?.id).toBe(summary.id)
+
+    const restored = new RepositoryService()
+    restored.initialize(new RepositoryStore(openTestDatabase(databaseDirectory)))
+
+    expect(restored.list()).toEqual([
+      expect.objectContaining({
+        id: summary.id,
+        name: summary.name,
+        path: summary.path,
+        isGitRepository: true
+      })
+    ])
+
+    const again = await restored.register(repositoryPath)
+    expect(again.id).toBe(summary.id)
+    expect(restored.list()).toHaveLength(1)
+  })
+
+  it('重复登记同一目录刷新数据库更新时间', async () => {
+    const databaseDirectory = await createTempDir('devpilot-db-')
+    const database = openTestDatabase(databaseDirectory)
+    const persisted = new RepositoryService()
+    persisted.initialize(new RepositoryStore(database))
+
+    const summary = await persisted.register(repositoryPath)
+    const before = new RepositoryStore(database).findByPath(summary.path)?.updatedAt
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await persisted.register(repositoryPath)
+    const after = new RepositoryStore(database).findByPath(summary.path)?.updatedAt
+
+    expect(after).not.toBe(before)
+    expect(new RepositoryStore(database).list()).toHaveLength(1)
   })
 })
 

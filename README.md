@@ -2,9 +2,9 @@
 
 面向研发工作的 Windows 桌面智能助手。DevPilot 的目标是让开发者在本地代码仓库中通过 AI 理解代码、定位问题、提出修改，并在 Diff 审核确认后把修改应用到工作区。
 
-> 当前状态：**阶段 1–2 已完成；阶段 3 已实现仓库选择、文件树、Monaco 代码查看/手动编辑保存与只读 Git status/diff**。
-> SQLite 持久化、AI 对话、Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
-> 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准。
+> 当前状态：**阶段 1–3 已完成：仓库选择与持久化、文件树、Monaco 编辑保存、只读 Git status/diff、SQLite 基础表**。
+> AI 对话、Diff 审核闭环与 Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
+> 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准，数据库表结构见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
 
 ## 已实现
 
@@ -12,7 +12,8 @@
 - 安全窗口配置：`contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`。
 - 最小化 Preload API：`window.devPilot.app.*`、`window.devPilot.settings.*`，不暴露任意 IPC channel。
 - 主进程 IPC：应用信息、Ping 通信测试、AI 配置状态查询、仓库与文件读写，入参使用 Zod 校验。
-- 本地仓库选择与切换：系统目录对话框，会话内登记，自动识别 Git 仓库。
+- 本地仓库选择与切换：系统目录对话框，自动识别 Git 仓库。
+- SQLite 持久化：`better-sqlite3`（N-API 预编译）在 `userData` 下创建 `devpilot.db`；`user_version` 迁移管理 `repositories`、`conversations`、`messages`、`edit_sessions`、`file_edits` 基础表与外键/索引；仓库列表跨启动保留并自动恢复最近仓库。
 - 安全文件访问：仓库 ID + 相对路径，`realpath` 规范化，拦截路径穿越、绝对路径与符号链接逃逸。
 - 文件树与代码查看：忽略 `.git` / `node_modules`，5000 项上限；文件读写 1 MB 上限，支持 UTF-8/BOM，拒绝二进制与非法编码。
 - Monaco Editor 代码查看与手动编辑：按扩展名自动识别语言并提供语法高亮，多标签切换，关闭标签时释放模型与编辑器实例；Worker 随应用本地打包。
@@ -37,16 +38,18 @@
 | UI 组件    | Element Plus 2 + 自定义暗色主题             |
 | 代码编辑   | Monaco Editor 0.57（本地 Worker、手动保存） |
 | Git        | 系统 Git CLI（只读 status/diff，参数数组）  |
+| 本地数据   | SQLite + better-sqlite3 13（N-API 预编译）  |
 | 数据校验   | Zod 4                                       |
 | 测试/规范  | Vitest 5、ESLint 10、Prettier 3             |
-| 规划中     | LangChain.js、SQLite、ripgrep               |
+| 规划中     | LangChain.js、ripgrep                       |
 
 ## 环境要求
 
 - Windows 10 / 11
 - Node.js >= 22.12（当前验证版本：22.20.0）
 - npm（当前验证版本：6.14.5）
-- Git status/diff 依赖系统 `git` 命令（需在 PATH 中）；未安装时面板会提示 `GIT_NOT_AVAILABLE`。ripgrep 将在阶段 5 使用，随包分发方案尚待验证。
+- Git status/diff 依赖系统 `git` 命令（需在 PATH 中）；未安装时面板会提示 `GIT_NOT_AVAILABLE`。
+- SQLite 引擎随 `better-sqlite3` 打包，无需单独安装数据库；本机已验证该模块的 N-API 预编译二进制可在 Electron 44（Node 24 / ABI 149）与 Node 22 下直接加载。ripgrep 将在阶段 5 使用，随包分发方案尚待验证。
 
 本项目 `.npmrc` 使用 npmmirror 镜像，适配国内网络。若 Electron 二进制下载失败，可显式指定镜像后重试：
 
@@ -102,7 +105,8 @@ V1 按项目决定采用**本地 `.env`**，不提供应用内密钥编辑：
 ## 数据目录
 
 Electron `userData` 目录（Windows 通常为 `%APPDATA%\DevPilot`）用于保存 `.env`
-等本地配置。SQLite 数据库将在阶段 3 引入，并同样存放在该目录。
+与 SQLite 数据库 `devpilot.db`（含 WAL 日志文件）。数据库由主进程启动时创建并执行迁移，
+应用退出时关闭连接；若初始化失败，应用仍可启动，但本次运行不会持久化仓库信息。
 
 ## 目录结构
 
@@ -113,17 +117,16 @@ src/
 ├── renderer/    # Vue 页面、组件、路由、Pinia Store
 └── shared/      # 共享类型、Zod Schema、常量
 tests/unit/      # Vitest 单元测试
-docs/            # 技术设计、开发计划、安全说明、架构决策
+docs/            # 技术设计、开发计划、安全说明、架构决策、数据库表结构
 ```
 
 ## 已知限制
 
 - 尚未接入 AI 模型、工具调用与流式输出（阶段 4–5）。
-- 仓库登记仅保存在当前进程内，重启应用后需重新选择；SQLite 持久化尚未实现。
+- SQLite 已创建对话、消息、编辑会话与文件编辑表，但对话与 AI 修改流程尚未使用这些表（阶段 4–6）。
 - 目前已支持手动编辑与保存；AI 提议修改的 Diff 审核尚未接入（阶段 6）。
 - Git 集成目前只读；暂存、提交、分支切换与 AI 提议修改的 Diff 审核（阶段 6）尚未接入。
 - Diff 视图为纯文本统一 Diff，尚未使用 Monaco Diff Editor（阶段 6）。
-- 对话与编辑会话尚未持久化。
-- 尚未生成 Windows 安装包，原生模块验证未开始（阶段 7）。
+- 尚未生成 Windows 安装包，better-sqlite3 在安装包内的加载验证未开始（阶段 7）。
 - 应用图标暂用脚手架占位图。
 - Element Plus 与 Monaco 当前为全量引入，Renderer 产物与语言 Worker 体积较大，后续可按需引入优化。
