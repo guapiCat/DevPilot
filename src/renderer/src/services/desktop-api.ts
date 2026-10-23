@@ -12,6 +12,7 @@ import type {
 import type { ApplyFileEditResult, EditSession, FileEdit } from '@shared/types/edit'
 import type { GitDiffResult, GitStatus } from '@shared/types/git'
 import type { ErrorCode, IpcErrorPayload, IpcResult } from '@shared/types/ipc'
+import type { ModelProfileInput, TestModelProfileInput } from '@shared/types/model'
 import type {
   FileContent,
   FileTreeResult,
@@ -51,6 +52,18 @@ export const desktopApi = {
     },
     async testConnection(): Promise<AiConnectionTestResult> {
       return unwrap(await window.devPilot.settings.testConnection())
+    },
+    async saveModelProfile(input: ModelProfileInput): Promise<AiConfigStatus> {
+      return unwrap(await window.devPilot.settings.saveModelProfile(input))
+    },
+    async deleteModelProfile(profileId: string): Promise<AiConfigStatus> {
+      return unwrap(await window.devPilot.settings.deleteModelProfile(profileId))
+    },
+    async activateModelProfile(profileId: string): Promise<AiConfigStatus> {
+      return unwrap(await window.devPilot.settings.activateModelProfile(profileId))
+    },
+    async testModelProfile(input: TestModelProfileInput): Promise<AiConnectionTestResult> {
+      return unwrap(await window.devPilot.settings.testModelProfile(input))
     }
   },
   chat: {

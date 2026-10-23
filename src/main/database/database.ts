@@ -75,6 +75,28 @@ const MIGRATIONS: readonly Migration[] = [
   (db) => {
     // v2：为 assistant 消息保存工具调用摘要，供重新加载后展示；不保存工具输出正文。
     db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT;')
+  },
+  (db) => {
+    // v3：多模型档案。API Key 只保存 safeStorage 密文的 base64，不保存明文。
+    db.exec(`
+      CREATE TABLE model_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        model TEXT NOT NULL,
+        api_key_cipher TEXT,
+        tools_enabled INTEGER NOT NULL DEFAULT 1,
+        is_active INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX ux_model_profiles_active
+        ON model_profiles(is_active) WHERE is_active = 1;
+
+      CREATE INDEX idx_model_profiles_updated_at ON model_profiles(updated_at DESC);
+    `)
   }
 ]
 

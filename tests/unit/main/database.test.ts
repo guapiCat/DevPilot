@@ -61,6 +61,7 @@ describe('openDatabase', () => {
       'edit_sessions',
       'file_edits',
       'messages',
+      'model_profiles',
       'repositories'
     ])
 
@@ -77,7 +78,9 @@ describe('openDatabase', () => {
       'idx_edit_sessions_repository',
       'idx_file_edits_session',
       'idx_messages_conversation',
-      'idx_repositories_updated_at'
+      'idx_model_profiles_updated_at',
+      'idx_repositories_updated_at',
+      'ux_model_profiles_active'
     ])
   })
 
@@ -90,7 +93,7 @@ describe('openDatabase', () => {
     expect(columns).toContain('tool_calls')
   })
 
-  it('从 v1 升级到 v2 保留已有消息', () => {
+  it('从 v1 升级到最新版本保留已有消息', () => {
     db.prepare(
       `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
        VALUES ('c1', NULL, 'demo', 'now', 'now')`
@@ -101,6 +104,7 @@ describe('openDatabase', () => {
     ).run()
 
     db.exec('ALTER TABLE messages DROP COLUMN tool_calls;')
+    db.exec('DROP TABLE model_profiles;')
     db.pragma('user_version = 1')
 
     for (const instance of openDatabases.splice(0)) {
@@ -108,7 +112,7 @@ describe('openDatabase', () => {
     }
 
     const upgraded = open()
-    expect(upgraded.pragma('user_version', { simple: true })).toBe(2)
+    expect(upgraded.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(upgraded.prepare('SELECT content FROM messages WHERE id = ?').get('m1')).toEqual({
       content: 'hello'
     })
@@ -118,6 +122,7 @@ describe('openDatabase', () => {
         .all()
         .map((row) => row.name)
     ).toContain('tool_calls')
+    expect(tableNames(upgraded)).toContain('model_profiles')
   })
 
   it('重复打开时迁移幂等且保留数据', () => {

@@ -674,6 +674,82 @@ describe('ChatService 工具循环', () => {
     expect(store.listMessages(conversation.id).map((message) => message.role)).toEqual(['user'])
   })
 
+  it('使用 configProvider 提供的模型配置', async () => {
+    const providerConfig = {
+      provider: 'openai-compatible' as const,
+      apiKey: 'sk-openai',
+      model: 'qwen-plus',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      toolsEnabled: true
+    }
+    const requests: ModelStreamRequest[] = []
+    const adapterFactory = vi.fn(() =>
+      createAdapter(async function* () {
+        yield textDelta('回答')
+      }, requests)
+    )
+    const service = createService(
+      async function* () {
+        yield textDelta('unused')
+      },
+      {
+        adapterFactory,
+        configProvider: () => providerConfig
+      }
+    )
+    const conversation = service.createConversation(null)
+    const { sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
+      sink
+    )
+    await waitFor((event) => event.type === 'completed')
+
+    expect(adapterFactory).toHaveBeenCalledWith(providerConfig)
+    expect(requests).toHaveLength(1)
+  })
+
+  it('模型关闭工具时不绑定工具且系统提示声明未读取仓库', async () => {
+    const requests: ModelStreamRequest[] = []
+    const service = createService(
+      async function* (request) {
+        requests.push(request)
+        yield textDelta('我没有读取仓库文件。')
+      },
+      {
+        toolRegistry: createToolRegistry(async () => ({
+          content: 'x',
+          summary: 'x',
+          truncated: false
+        })),
+        locateRepository: () => ({ name: 'demo-repo' }),
+        configProvider: () => ({
+          provider: 'deepseek',
+          apiKey: 'sk-test-only',
+          model: 'deepseek-chat',
+          baseUrl: 'https://api.deepseek.com',
+          toolsEnabled: false
+        })
+      }
+    )
+    const conversation = service.createConversation('repo-1')
+    const { events, sink, waitFor } = createSink()
+
+    service.send(
+      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' },
+      sink
+    )
+    await waitFor((event) => event.type === 'completed')
+
+    expect(requests[0].tools).toBeUndefined()
+    const systemPrompt = requests[0].messages[0].content
+    expect(systemPrompt).toContain('当前会话未关联仓库或工具不可用')
+    expect(systemPrompt).not.toContain('list_files')
+    expect(systemPrompt).toContain('仅用于标识，内容尚未读取')
+    expect(events.some((event) => event.type === 'tool_started')).toBe(false)
+  })
+
   it('工具错误不会终止对话，记录为 error 后继续回答', async () => {
     let round = 0
     const service = createService(
@@ -793,6 +869,25 @@ describe('ChatService.testConnection', () => {
       code: 'MODEL_CONFIG_ERROR',
       message: 'API Key 无效或无权访问该模型'
     })
+  })
+
+  it('使用 configProvider 的模型配置进行连接测试', async () => {
+    const service = createService(
+      async function* () {
+        yield textDelta('OK')
+      },
+      {
+        configProvider: () => ({
+          provider: 'openai-compatible',
+          apiKey: 'sk-openai',
+          model: 'qwen-plus',
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+          toolsEnabled: true
+        })
+      }
+    )
+
+    await expect(service.testConnection()).resolves.toMatchObject({ model: 'qwen-plus' })
   })
 
   it('超时后返回连接超时错误', async () => {

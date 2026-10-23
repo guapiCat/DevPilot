@@ -11,6 +11,7 @@ import type {
 import type { ApplyFileEditResult, EditSession, FileEdit } from './edit'
 import type { GitDiffResult, GitStatus } from './git'
 import type { IpcResult } from './ipc'
+import type { ModelProfileInput, TestModelProfileInput } from './model'
 import type { FileContent, FileTreeResult, FileWriteResult, RepositorySummary } from './repository'
 
 export interface PingResponse {
@@ -26,6 +27,10 @@ export interface DevPilotApi {
   settings: {
     getAiConfigStatus(): Promise<IpcResult<AiConfigStatus>>
     testConnection(): Promise<IpcResult<AiConnectionTestResult>>
+    saveModelProfile(input: ModelProfileInput): Promise<IpcResult<AiConfigStatus>>
+    deleteModelProfile(profileId: string): Promise<IpcResult<AiConfigStatus>>
+    activateModelProfile(profileId: string): Promise<IpcResult<AiConfigStatus>>
+    testModelProfile(input: TestModelProfileInput): Promise<IpcResult<AiConnectionTestResult>>
   }
   chat: {
     listConversations(): Promise<IpcResult<Conversation[]>>

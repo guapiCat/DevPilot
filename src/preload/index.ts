@@ -17,7 +17,13 @@ const api: DevPilotApi = {
   },
   settings: {
     getAiConfigStatus: () => invoke(IPC_CHANNELS.settingsGetAiConfig),
-    testConnection: () => invoke(IPC_CHANNELS.settingsTestConnection)
+    testConnection: () => invoke(IPC_CHANNELS.settingsTestConnection),
+    saveModelProfile: (input) => invoke(IPC_CHANNELS.settingsSaveModelProfile, input),
+    deleteModelProfile: (profileId) =>
+      invoke(IPC_CHANNELS.settingsDeleteModelProfile, { profileId }),
+    activateModelProfile: (profileId) =>
+      invoke(IPC_CHANNELS.settingsActivateModelProfile, { profileId }),
+    testModelProfile: (input) => invoke(IPC_CHANNELS.settingsTestModelProfile, input)
   },
   chat: {
     listConversations: () => invoke(IPC_CHANNELS.chatListConversations),

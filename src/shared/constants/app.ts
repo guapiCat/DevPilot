@@ -5,6 +5,12 @@ export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 
 export const MAX_PING_MESSAGE_LENGTH = 200
 
+export const MAX_MODEL_PROFILES = 20
+export const MAX_MODEL_PROFILE_NAME_LENGTH = 40
+export const MAX_MODEL_ID_LENGTH = 120
+export const MAX_MODEL_BASE_URL_LENGTH = 2048
+export const MAX_API_KEY_LENGTH = 4096
+
 export const MAX_CHAT_MESSAGE_LENGTH = 8000
 export const CHAT_HISTORY_MAX_MESSAGES = 20
 export const CHAT_HISTORY_MAX_CHARS = 24_000
@@ -66,6 +72,10 @@ export const IPC_CHANNELS = {
   appPing: 'app:ping',
   settingsGetAiConfig: 'app:get-ai-config-status',
   settingsTestConnection: 'app:test-ai-connection',
+  settingsSaveModelProfile: 'settings:save-model-profile',
+  settingsDeleteModelProfile: 'settings:delete-model-profile',
+  settingsActivateModelProfile: 'settings:set-active-model-profile',
+  settingsTestModelProfile: 'settings:test-model-profile',
   repositorySelect: 'repository:select',
   repositoryList: 'repository:list',
   repositoryGetTree: 'repository:get-tree',

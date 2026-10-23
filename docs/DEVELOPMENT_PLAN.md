@@ -1,7 +1,7 @@
 # DevPilot 开发计划与验收状态
 
 > 开发基线：`docs/TECHNICAL_DESIGN.md`
-> 更新时间：2026-10-22
+> 更新时间：2026-10-23
 
 ## 当前进度
 
@@ -172,6 +172,32 @@
 
 - `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test`（29 个测试文件、296 个用例通过、2 个跳过）、`npm run build` 通过。
 - 未覆盖：真实 Electron 窗口内的完整人工验收随阶段 7 最终验收清单执行。
+
+## 多模型配置（阶段 7 前，已完成）
+
+- [x] 应用内模型档案：新增、编辑、删除、切换全局当前模型，内置 DeepSeek / OpenAI / 通义千问 / Moonshot / 智谱 / SiliconFlow / Ollama / 自定义预设。
+- [x] SQLite v3 迁移 `model_profiles`，部分唯一索引保证单一 active；删除 active 自动提升最近更新的剩余档案。
+- [x] API Key 使用 Electron `safeStorage` 加密入库，Renderer/IPC 只返回 `hasApiKey`；留空更新保留旧 Key。
+- [x] `.env` 降级为无档案或数据库不可用时的兜底。
+- [x] 适配层重构：共用 `OpenAiCompatibleAdapter`，DeepSeek 与 OpenAI 兼容适配器仅负责创建底层模型。
+- [x] 每个档案可关闭代码理解工具，同时作用于工具绑定与系统提示。
+- [x] 设置页档案管理界面、预设联动、草稿连接测试、删除确认与状态摘要。
+- [x] Base URL 安全校验（https / 本地回环 http / 拒绝内嵌凭据）。
+- [x] 对话输入框工具栏快捷切换当前模型：与设置页同一全局语义，生成中禁用，失败回退；无档案时显示 `.env` 只读标签。
+
+实现要点：
+
+- 主进程使用可注入的 `SecretCipher`：生产实现调用 `safeStorage`（Windows DPAPI），测试注入 fake；只有 `ModelProfileService` 解密 Key，且结果只用于创建模型适配器。
+- `ChatService` 新增 `configProvider`，由 `src/main/index.ts` 在数据库初始化后注入 `modelProfileService.resolveActive()`；无档案、DB 不可用时回退 `readAiConfigValues(process.env)`。
+- `toolsEnabled=false` 时 `execute()` 同时使用空 ToolRegistry 与“未关联仓库/工具不可用”的系统提示，避免模型仍尝试工具。
+- 设置页草稿测试通过 `resolveDraft()` 组合“显式 Key > 档案密文 > 空”，不落库；连接测试逻辑抽到 `connection-test.ts` 与对话连接测试共用。
+- Element Plus 新增 `ElDialog` / `ElSwitch` 的组件注册与样式导入。
+
+验证结果：
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test`（34 个测试文件、344 个用例通过、2 个跳过）、`npm run build` 通过。
+- 新增测试：v3 迁移与索引、`ModelProfileStore` CRUD/单 active/删除提升/事务回滚、`ModelProfileService`（自动激活、空 Key 保留、密文不泄漏、`.env` 兜底、加密不可用、解密失败、草稿 Key 优先级）、OpenAI 适配器与工厂分派、Base URL/长度/uuid 的 Zod 规则、`ChatService` 的 `configProvider` 与 `toolsEnabled=false`、chat store 的配置加载/快捷切换/慢响应竞态。
+- 未覆盖：真实 DPAPI 跨重启解密、真实模型档案切换与工具开关的 Electron 人工验收，需本机 Key；Playwright 设置页与对话模型切换冒烟已完成（静态产物 + mock），删光档案回退 `.env`、激活失败回退与深浅色样式均已验证。
 
 ## 阶段 7：稳定性与交付
 

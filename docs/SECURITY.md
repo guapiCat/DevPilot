@@ -12,7 +12,7 @@ Preload（contextBridge）
    │ 固定 IPC channel，不暴露 ipcRenderer
 Main（Electron）
    │ 重新校验入参、执行文件/模型/数据库操作
-本地文件系统 / Git / SQLite / DeepSeek API
+本地文件系统 / Git / SQLite / 模型服务 API（DeepSeek 或 OpenAI 兼容）
 ```
 
 - Renderer 不导入 `fs`、`child_process`、`better-sqlite3` 等 Node.js 能力。
@@ -35,7 +35,10 @@ Main（Electron）
 - 写入限制 1 MB，拒绝空字符；保留原文件 UTF-8 BOM；先写同目录临时文件再重命名，失败时清理临时文件并返回稳定错误码。
 - IPC 入参经 Zod 校验（Ping、仓库 ID 与文件相对路径等）。
 - IPC 统一返回 `{ ok, data } | { ok, error: { code, message } }`，错误码稳定，渲染层统一解包。
-- API Key 状态仅返回布尔值与模型/地址，**绝不返回 Key 内容**。
+- API Key 状态仅返回 `hasApiKey` 布尔值与模型/地址，**绝不返回 Key 内容或密文**。
+- 模型档案的 API Key 使用 Electron `safeStorage`（Windows DPAPI）加密后写入 SQLite；`safeStorage` 不可用时拒绝保存带 Key 的档案并返回 `SECRET_STORAGE_UNAVAILABLE`。更新档案时 Key 留空表示保留旧密文。
+- 自定义模型 Base URL 由 Zod 校验：必须 `https`，仅 `localhost` / `127.0.0.1` / `[::1]` 允许 `http`，拒绝 URL 内嵌用户名或密码，防止 Key 走明文网络或被发送到带凭据的地址。
+- “测试连接”草稿中的 Key 只随单次 IPC 传输，不落库；编辑已有档案时留空则主进程复用已存的密文。
 - `.env` 仅由主进程加载；加载器不打印配置值，只记录加载文件数量。
 - `.env` 已加入 `.gitignore`；仓库内仅保留 `.env.example`。
 - 页面禁止任意导航；新窗口请求一律拒绝，`https://` 链接交由系统浏览器打开。
@@ -48,7 +51,7 @@ Main（Electron）
 - 加载失败的 `.env` 会记录错误原因，不静默吞掉异常。
 - SQLite 数据库位于 Electron `userData` 目录（`devpilot.db`），不写入安装目录或用户仓库；迁移由 `user_version` 管理。
 - 数据库访问全部使用 `better-sqlite3` 参数化语句，不拼接用户输入；启用 `foreign_keys`、WAL 与 `busy_timeout`。
-- 数据库保存仓库元数据（名称、绝对路径、时间）、会话、消息与 AI 编辑提案；不保存 API Key 或 Git 输出。编辑提案会保存被提议文件的原始与建议内容（用于 Diff 审核与重启恢复），仅限用户仓库中被提议的单个文件，不保存整仓内容。
+- 数据库保存仓库元数据（名称、绝对路径、时间）、会话、消息、AI 编辑提案与模型档案；不保存 API Key 明文或 Git 输出。编辑提案会保存被提议文件的原始与建议内容（用于 Diff 审核与重启恢复），仅限用户仓库中被提议的单个文件，不保存整仓内容。模型档案的 Key 只保存 `safeStorage` 密文的 base64。
 - 数据库初始化失败时应用仍可启动，但本次运行不持久化；日志不输出数据库内容或完整路径。
 - `.env` 不存在属于正常状态，设置页明确展示“未配置”。
 - 模型请求只在主进程发起；`AbortController`、超时计时器与 API Key 都不进入 Renderer。
@@ -74,19 +77,36 @@ Main（Electron）
 
 ## 3. API Key 存储边界
 
-V1 按项目决定使用本地 `.env`：
+多模型功能引入两种存储方式，模型档案优先，`.env` 仅在没有档案或数据库不可用时兜底：
 
-- 开发环境路径：项目根目录 `.env`。
-- 打包后路径：Electron `userData` 目录下的 `.env`（Windows 通常为 `%APPDATA%\DevPilot`）。
-- `.env` 是**明文本地文件**，不等同于 Windows 凭据管理器或系统密钥库。
+### 3.1 模型档案（设置页配置）
+
+- 保存在 `userData/devpilot.db` 的 `model_profiles.api_key_cipher` 列。
+- 写入前用 Electron `safeStorage.encryptString()` 加密，数据库只保存密文的 base64。Windows 下底层为 DPAPI，密文与当前 Windows 用户绑定。
+- 解密只发生在主进程 `ModelProfileService.resolveActive()`，结果仅用于构造模型适配器，不返回 Renderer、不写日志、不写数据库。
+- IPC 与 Renderer 只能拿到 `hasApiKey: boolean`；编辑表单不回显 Key。
+- 更新档案时 Key 留空 = 保留旧密文，避免误清空；需更换时输入新 Key。
+- `safeStorage.isEncryptionAvailable()` 为 false 时，带 Key 的保存返回 `SECRET_STORAGE_UNAVAILABLE`，状态中 `secretStorageAvailable: false`，界面提示改用 `.env`；空 Key 的 OpenAI 兼容档案仍可保存。
+- 解密失败（例如数据库被其他 Windows 账户复制）返回 `MODEL_CONFIG_ERROR`，提示重新填写 Key，不静默使用空 Key。
+- Key 不会出现在 IPC 返回、Renderer 持久化、日志或前端构建产物中。
+- 已知边界：`safeStorage` 依赖操作系统登录会话，无法防御已取得当前 Windows 用户权限的恶意程序；它提高的是静态数据库文件泄漏时的成本，而不是完整的主机安全。
+
+### 3.2 `.env` 兜底
+
+- 开发环境路径：项目根目录 `.env`；打包后：Electron `userData` 目录下的 `.env`（通常为 `%APPDATA%\DevPilot`）。
+- `.env` 是**明文本地文件**，不等同于 Windows 凭据管理器或系统密钥库；已被 `.gitignore` 忽略。
 - 已存在的进程环境变量不会被 `.env` 覆盖。
-- Key 不写入数据库、日志、Renderer 持久化或前端构建产物。
+- 只要存在 active 档案，`.env` 即不再参与模型请求。
 
-后续如需更高安全等级，应评估 Electron `safeStorage` 或系统凭据存储，并明确迁移方式；这属于设计变更，需先评审。
+### 3.3 草稿连接测试
+
+- 设置页未保存的档案可直接“测试连接”，此时 Key 通过单次 IPC 请求传入主进程，不落库、不缓存。
+- 编辑已有档案且留空 Key 时，主进程复用数据库中的密文解密后测试，避免把 Key 回传到 Renderer。
+- 测试请求与普通对话一样受超时限制，只发送一条最小提示。
 
 ## 4. 云端数据发送
 
-阶段 4 起 DeepSeek 已接通，阶段 5 起工具读取的仓库内容也会参与请求，阶段 6 起模型生成的提案内容同样会发送：
+阶段 4 起云端模型已接通（现支持 DeepSeek 与任意 OpenAI 兼容服务），阶段 5 起工具读取的仓库内容也会参与请求，阶段 6 起模型生成的提案内容同样会发送。请求目标取决于设置页当前激活的模型档案，或没有档案时的 `.env`：
 
 - 发送内容：用户输入、对话历史（最近 20 条 / 24k 字符）、工具调用参数（含 `propose_file_edit` 的 `oldText`/`newText`/`content`），以及被读取的仓库文件片段与搜索片段。
 - 仓库内容只在模型主动调用工具时读取，且受敏感路径阻断、行区间、条目数与字符上限约束；不会整仓上传。
@@ -111,8 +131,10 @@ V1 按项目决定使用本地 `.env`：
 - [x] 关闭脏标签、切换仓库、离开工作区与退出应用时提示未保存修改。
 - [x] Git 命令使用参数数组执行、`shell: false`，设置 10 秒超时与输出上限；V1 仅只读操作，无写入、提交或推送能力。
 - [x] Git Diff 路径通过安全相对路径校验，未登记的仓库 ID 与仓库外路径直接拒绝。
-- [x] SQLite 使用参数化 SQL 与 `user_version` 迁移；启用外键约束；数据库位于 `userData`，不保存 API Key 或普通文件内容。
-- [x] 数据库初始化失败时降级为内存模式，不阻断应用启动，也不泄露数据库内容到日志。
+- [x] SQLite 使用参数化 SQL 与 `user_version` 迁移；启用外键约束；数据库位于 `userData`，不保存 API Key 明文或普通文件内容。
+- [x] 模型档案 Key 使用 `safeStorage` 加密后入库，IPC/Renderer 只返回 `hasApiKey`；加密不可用或解密失败返回稳定错误码（单元测试覆盖，实机 DPAPI 验收待补充）。
+- [x] 自定义 Base URL 经 Zod 校验：仅 https，http 仅限本地回环，拒绝 URL 内嵌凭据（单元测试覆盖）。
+- [x] 数据库初始化失败时降级为内存模式，不阻断应用启动，也不泄露数据库内容到日志；模型配置回退 `.env`。
 - [x] 对话与消息通过参数化 SQL 持久化；会话标题由首条用户消息生成并截断，不来自模型输出。
 - [x] 取消/超时/失败时不写入部分回答；历史裁剪只保留 user/assistant 消息并限制字符数。
 - [x] 删除会话前需界面确认，永久删除会话及其消息；生成中的会话被主进程拒绝删除。
@@ -152,6 +174,9 @@ V1 按项目决定使用本地 `.env`：
 - [x] Git 命令未安装、超时与输出超限返回稳定错误码（代码路径覆盖；未在 CI 中模拟）。
 - [x] SQLite 迁移、表与索引、外键级联、参数化 SQL、跨重启恢复（单元测试覆盖）。
 - [x] SQLite v1→v2 迁移保留旧数据并新增 `messages.tool_calls`（单元测试覆盖）；Electron 44 构建产物的实机启动验证留待阶段 7 最终验收。
+- [x] SQLite v3 迁移创建 `model_profiles`、单 active 部分唯一索引，v2→v3 保留旧数据（单元测试覆盖）。
+- [x] 模型档案 CRUD、空 Key 保留、DeepSeek 缺 Key、`.env` 兜底、加密不可用与解密失败（单元测试覆盖）。
+- [x] 工具开关关闭时不绑定工具且系统提示声明未读取仓库（单元测试覆盖）。
 - [x] 对话流式、取消、超时、错误映射、重试、重复/并发 requestId、连接测试（单元测试覆盖）。
 - [x] 渲染层验证未配置 Key 时禁用输入、事件错误可重试、停止后不残留生成状态（Playwright + API mock）。
 - [x] 工具循环覆盖正常调用、无工具单轮、轮数/单轮/总量上限、重复调用、工具错误/超时、取消、输出截断与事件顺序（单元测试覆盖）。
@@ -161,7 +186,9 @@ V1 按项目决定使用本地 `.env`：
 - [x] 未确认提案不改磁盘；拒绝后文件内容保持不变（单元测试覆盖）。
 - [x] `propose_file_edit` 参数组合、敏感路径阻断、事件回调与错误映射（单元测试覆盖）。
 - [x] `edit_proposed` 事件顺序与单一终态语义（单元测试覆盖）。
-- [ ] 真实 DeepSeek 工具调用与修改建议端到端验收（依赖本地 Key 与额度，阶段 7 补充）。
-- [ ] 真实 DeepSeek API 的端到端验收（依赖本地 Key 与额度，阶段 7 补充）。
+- [ ] 真实模型工具调用与修改建议端到端验收（依赖本地 Key 与额度，阶段 7 补充）。
+- [ ] 真实模型 API 的端到端验收（DeepSeek 与至少一个 OpenAI 兼容服务，依赖本地 Key 与额度）。
+- [ ] 重启应用后模型档案与 active 保留；用 SQLite 查询确认 `api_key_cipher` 为 base64 密文且 Renderer/IPC 返回无 Key。
+- [ ] 切换 active 后对话与工具调用正常；关闭工具开关后助手明确声明未读取文件。
 - [ ] 工作区 Diff 面板的人工验收（阶段 7 最终验收）。
 - [ ] Windows 安装包中原生模块加载验证（阶段 7）。

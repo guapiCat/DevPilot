@@ -3,14 +3,16 @@ import {
   DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_DEEPSEEK_MODEL
 } from '@shared/constants/app'
-import type { AiConfigStatus } from '@shared/types/app'
 
 export type EnvLike = Record<string, string | undefined>
 
 export interface ResolvedAiConfig {
+  provider: 'deepseek' | 'openai-compatible'
   apiKey: string
   model: string
   baseUrl: string
+  toolsEnabled: boolean
+  profileId?: string
 }
 
 /**
@@ -21,24 +23,18 @@ export function readAiConfigValues(env: EnvLike): ResolvedAiConfig | null {
   if (!apiKey) return null
 
   return {
+    provider: 'deepseek',
     apiKey,
     model: env[AI_CONFIG_ENV.model]?.trim() || DEFAULT_DEEPSEEK_MODEL,
-    baseUrl: env[AI_CONFIG_ENV.baseUrl]?.trim() || DEFAULT_DEEPSEEK_BASE_URL
+    baseUrl: env[AI_CONFIG_ENV.baseUrl]?.trim() || DEFAULT_DEEPSEEK_BASE_URL,
+    toolsEnabled: true
   }
 }
 
-/**
- * 只返回配置状态，绝不返回 API Key 本身。
- */
-export function readAiConfigStatus(env: EnvLike): AiConfigStatus {
-  const model = env[AI_CONFIG_ENV.model]?.trim() || DEFAULT_DEEPSEEK_MODEL
-  const baseUrl = env[AI_CONFIG_ENV.baseUrl]?.trim() || DEFAULT_DEEPSEEK_BASE_URL
-  const configured = Boolean(env[AI_CONFIG_ENV.apiKey]?.trim())
+export function readEnvModelName(env: EnvLike): string {
+  return env[AI_CONFIG_ENV.model]?.trim() || DEFAULT_DEEPSEEK_MODEL
+}
 
-  return {
-    configured,
-    model,
-    baseUrl,
-    source: configured ? 'env' : 'none'
-  }
+export function readEnvBaseUrl(env: EnvLike): string {
+  return env[AI_CONFIG_ENV.baseUrl]?.trim() || DEFAULT_DEEPSEEK_BASE_URL
 }

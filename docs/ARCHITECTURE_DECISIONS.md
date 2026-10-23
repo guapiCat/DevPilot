@@ -33,6 +33,8 @@
 
 **影响**：`.env` 为明文文件，安全性低于系统凭据库，需在 README/设置页明确说明。Key 不进入数据库、日志和前端产物。若后续要求更高安全等级，先评估 `safeStorage` / 系统凭据存储迁移。
 
+> 后续变更：ADR-016 引入应用内模型档案，Key 改用 `safeStorage` 加密入库；`.env` 降级为无档案或数据库不可用时的兜底。
+
 ## ADR-005：IPC 使用结果封装与统一错误码
 
 **背景**：Electron IPC 异常跨进程传递时容易丢失自定义字段，且错误信息可能包含敏感路径。
@@ -185,3 +187,20 @@
 - `tsconfig.web.json` 增加 Monaco 子路径类型映射，供 `typeof import('monaco-editor/editor/editor.api')` 与 Worker 导入使用。
 
 **影响**：语言语法 chunk 由 84 个降至 32 个，入口 JS 由 1800.76 kB 降至 233.99 kB，`WorkspaceView` 由 2303.21 kB 降至 80.02 kB，入口 CSS 由约 377 kB 降至 98.46 kB。Monaco 核心（`editor.api` 约 5.05 MB 与 Monaco 入口 chunk 约 2.17 MB）仍会在首次打开文件时一次性加载，但不再阻塞工作区首屏；Diff 审核首次打开同样有短暂加载延迟，由 Suspense 骨架覆盖。冷门语言仅以纯文本显示。语言支持变更时需同步维护 `services/monaco.ts`、`utils/language.ts` 与 `utils/markdown.ts` 的注册列表。
+
+## ADR-016：多提供商模型档案 + safeStorage 密钥存储 + 共用 OpenAI 兼容适配层
+
+**背景**：V1 只支持 `.env` 配置的单一 DeepSeek 模型，切换模型需要改文件并重启。用户要求在不改文件、不重启的前提下配置多个大模型并随时切换，同时不能把 API Key 明文写进数据库。候选范围包括：引入各厂商原生 SDK、只做 OpenAI 兼容协议、或同时支持两类协议；密钥存储可选 `.env`、明文数据库、`safeStorage`、系统凭据库。
+
+**决策**：
+
+- **提供商范围**：支持 DeepSeek（继续使用 `@langchain/deepseek` 的 `ChatDeepSeek`）与通用 OpenAI 兼容服务（`@langchain/openai` 的 `ChatOpenAI`），内置 OpenAI、通义千问、Moonshot、智谱、SiliconFlow、Ollama 与自定义预设。不接入 Anthropic / Gemini 原生协议。
+- **数据模型**：新增 v3 迁移 `model_profiles`（见 DATABASE_SCHEMA 4.6）。`provider` 为 `deepseek | openai-compatible`；`tools_enabled`、`is_active` 为 0/1；`api_key_cipher` 保存 `safeStorage` 密文的 base64。以部分唯一索引 `WHERE is_active = 1` 在数据库层保证单一 active；切换与删除后在同一事务内维护该不变量，删除 active 时提升 `updated_at` 最新的剩余档案。档案上限 20 个。
+- **密钥**：`SecretCipher` 接口抽象加解密，生产实现 `ElectronSecretCipher` 调用 `safeStorage`；单元测试注入 fake。`safeStorage` 不可用时拒绝保存带 Key 的档案；更新时 Key 留空保留旧密文；解密失败返回 `MODEL_CONFIG_ERROR`。IPC/Renderer 只返回 `hasApiKey`。`openai-compatible` 允许空 Key（本地 Ollama 等，适配器用占位值 `not-needed`），DeepSeek 必须填写。
+- **生效范围**：全局当前模型，由设置页切换；不支持会话级模型，也不在消息上记录所用模型。无档案或数据库不可用时回退 `.env`，保持旧用户可用。
+- **适配层**：把原 `DeepSeekAdapter` 的流式循环、文本归一化、工具分片聚合、usage、abort 与错误映射抽到 `OpenAiCompatibleAdapter`，构造参数接受 `createModel(options)`；`DeepSeekAdapter` 与 `OpenAiChatAdapter` 只负责创建底层 LangChain 模型。`ModelAdapter` 接口与事件语义不变，`ChatService` 通过可注入的 `configProvider` 获取当前配置，避免与数据库初始化顺序强耦合。
+- **工具兼容**：每个档案有“启用代码理解工具”开关，默认开。`ChatService.execute()` 用 `config.toolsEnabled` 同时控制 `runAgent` 的 ToolRegistry 与 system prompt；关闭时不绑定工具，提示词声明未读取仓库，避免模型仍尝试调用工具。
+- **Base URL 校验**：必须 `https`，仅本地回环允许 `http`；拒绝 URL 内嵌用户名/密码，防止 Key 走明文网络。
+- **连接测试**：抽出 `testAdapterConnection()` 供 `ChatService.testConnection()` 与设置页草稿测试共用；草稿 Key 只在单次 IPC 中传输，编辑已有档案留空则主进程复用密文。
+
+**影响**：用户可在设置页新增、切换、删除模型档案，重启后保留；API Key 不再要求写入 `.env`。引入 `@langchain/openai` 作为直接依赖，版本固定为 1.6.3（1.7.0 要求 `@langchain/core ^1.3.0`，而当前 core 为 1.2.20）。所有 OpenAI 兼容服务共用同一流式/工具代码路径，新增服务商通常只需增加预设。`safeStorage` 只在 `app.whenReady()` 后可用，因此服务在主进程装配阶段延迟初始化；数据库不可用时整个档案功能降级到 `.env`。已知限制：无法防御已取得当前 Windows 用户权限的攻击者；模型档案是全局配置，暂不支持按会话选择。

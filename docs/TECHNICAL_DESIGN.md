@@ -61,7 +61,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
   UI 组件      Element Plus + 自定义 CSS   常规控件与产品化布局
   代码编辑器   Monaco Editor               代码查看、编辑和 Diff 展示
   AI 编排      LangChain.js                模型调用与工具调用集成
-  模型服务     DeepSeek API                V1 默认云端模型
+  模型服务     DeepSeek / OpenAI 兼容 API  按用户配置的模型档案
   数据验证     Zod                         IPC 输入、工具参数和模型结构校验
   本地数据库   SQLite + better-sqlite3     对话、仓库配置、编辑会话
   代码搜索     ripgrep                     本地快速搜索
@@ -111,7 +111,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
 │ AI Orchestrator → Tool Registry → 受控本地工具        │
 └──────────────┬────────────────────┬──────────────────┘
                │                    │
-       本地文件系统、Git          DeepSeek API
+       本地文件系统、Git          模型 API（DeepSeek / OpenAI 兼容）
                │
           SQLite 数据库
 ```
@@ -120,7 +120,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
 
 **Renderer** - 只负责 UI、用户交互和展示状态。 - 通过 `window.devPilot`
 调用主进程能力。 - 不直接导入 `fs`、`child_process`、`better-sqlite3` 等
-Node.js 能力。 - 不直接保存 DeepSeek API Key。 - 不负责决定 AI
+Node.js 能力。 - 不直接保存模型 API Key。 - 不负责决定 AI
 工具是否有权限执行。
 
 **Preload** - 通过 `contextBridge.exposeInMainWorld` 暴露最小化 API。 -
@@ -279,13 +279,36 @@ devpilot/
 
 ### 5.4 设置页
 
-V1 至少支持： - DeepSeek API Key 设置与连接测试。 -
-模型名称配置（默认值应集中配置，不散落在代码中）。 -
-基本应用信息与数据目录说明。
+至少支持： - 模型档案管理：新增、编辑、删除、切换全局当前模型。 -
+内置服务商预设（DeepSeek、OpenAI、通义千问、Moonshot、智谱、SiliconFlow、Ollama、自定义），选择后自动填入 Base URL 与默认模型。 -
+每个档案独立的 API Key、模型名称、Base URL 与“启用代码理解工具”开关。 -
+保存前与列表中的连接测试。 - 基本应用信息与数据目录说明。 -
+无档案时的 `.env` 兜底提示。
 
 API Key 不得写入 Renderer
-的持久化存储或前端打包资源。生产环境优先使用系统凭据存储；如 V1
-暂时采用本地加密/配置方案，必须明确其安全边界，不得声称普通明文文件等同于安全密钥库。
+的持久化存储或前端打包资源。应用内档案使用 Electron `safeStorage`（Windows
+DPAPI）加密后写入 SQLite；明文只在主进程内存中存在。若系统加密不可用，拒绝保存带 Key
+的档案。`.env` 仅作为兜底，必须明确其明文安全边界，不得声称它与系统密钥库等价。
+
+### 5.5 模型档案数据流
+
+``` text
+SettingsView（档案表单）
+   │ saveModelProfile / testModelProfile（Zod 校验）
+Preload → IPC → ModelProfileService
+   │                     ├─ SecretCipher（safeStorage）加密 / 解密
+   │                     └─ ModelProfileStore → SQLite model_profiles
+   │
+ChatService.configProvider = () => modelProfileService.resolveActive()
+   │
+   ├─ provider = deepseek           → ChatDeepSeek
+   └─ provider = openai-compatible  → ChatOpenAI（Base URL 可配）
+```
+
+- `resolveActive()` 顺序：active 档案（解密 Key）→ `.env` → `MODEL_CONFIG_ERROR`。
+- 档案摘要只包含 `hasApiKey`，不包含 Key、密文或片段。
+- `toolsEnabled=false` 时既不绑定 ToolRegistry，也在 system prompt 中声明当前无工具。
+- 对话输入框工具栏的 `ModelSwitcher` 复用同一 `activateModelProfile` IPC 切换全局当前模型；chat store 保存完整 `AiConfigStatus`，切换后下一条消息生效。无档案但 `.env` 生效时仅显示只读的“环境变量 · 模型”标签。
 
 ------------------------------------------------------------------------
 
@@ -390,6 +413,16 @@ export interface ModelAdapter {
 这是项目内部接口的初始设计，不要求 LangChain.js
 原样实现此接口。LangChain.js
 的具体返回结构应由适配层转换成项目自己的事件类型。
+
+当前实现：
+
+- `OpenAiCompatibleAdapter`：共用适配器，负责流式循环、文本归一化、工具分片聚合、usage、
+  abort 与 HTTP 错误映射；构造时注入 `createModel(options)`。
+- `DeepSeekAdapter`：注入 `new ChatDeepSeek(options)`（`@langchain/deepseek`）。
+- `OpenAiChatAdapter`：注入 `new ChatOpenAI(options)`（`@langchain/openai`），Base URL 可配，
+  空 Key 使用占位值 `not-needed` 以支持本地 Ollama 等。
+- `createModelAdapter(config)` 按 `config.provider` 分派；`ResolvedAiConfig` 包含
+  `provider`、`apiKey`、`model`、`baseUrl`、`toolsEnabled` 与可选的 `profileId`。
 
 模型适配层必须考虑： - 流式文本。 - 工具调用及工具返回。 - 取消请求。 -
 超时。 - API 错误。 - 用量信息（如果供应商返回）。 -
@@ -569,6 +602,21 @@ interface DevPilotApi {
 
 以上是接口方向示例，具体方法需结合事件流和错误处理实现。
 
+模型档案相关方法（`window.devPilot.settings`）：
+
+``` ts
+getAiConfigStatus(): Promise<IpcResult<AiConfigStatus>>
+testConnection(): Promise<IpcResult<AiConnectionTestResult>>
+saveModelProfile(input: ModelProfileInput): Promise<IpcResult<AiConfigStatus>>
+deleteModelProfile(profileId: string): Promise<IpcResult<AiConfigStatus>>
+activateModelProfile(profileId: string): Promise<IpcResult<AiConfigStatus>>
+testModelProfile(input: TestModelProfileInput): Promise<IpcResult<AiConnectionTestResult>>
+```
+
+对应 IPC channel：`settings:save-model-profile`、`settings:delete-model-profile`、
+`settings:set-active-model-profile`、`settings:test-model-profile`，均沿用
+`{ ok, data } | { ok, error }` 封装。所有结果只包含 `hasApiKey`，不返回 Key 或密文。
+
 安全要求： - 不暴露 `invoke(channel, ...args)` 这种任意 channel API。 -
 Main 对每个 IPC 入参执行 Zod 校验。 - 对仓库 ID 进行查表，不能信任
 Renderer 传来的绝对路径。 - 文件操作使用仓库 ID + 相对路径，再由 Main
@@ -692,7 +740,11 @@ export type ChatEvent =
 -   提供 `.env.example`，但不得提交真实 API Key。
 -   不把 API Key 编译进 Renderer。
 -   不将密钥打印到日志。
--   生产环境优先使用系统凭据存储；开发环境可使用本地环境变量或明确标记的开发配置。
+-   应用内模型档案的 Key 使用 Electron `safeStorage`（Windows DPAPI）加密后写入 SQLite；明文只在主进程内存中使用，解密失败返回配置错误。
+-   `safeStorage` 不可用时拒绝保存带 Key 的档案；无 Key 的 OpenAI 兼容档案（如 Ollama）仍可保存。
+-   IPC / Renderer 只看到 `hasApiKey`；更新档案时 Key 留空表示保留旧密文。
+-   草稿连接测试的 Key 只随单次 IPC 传输，不落库。
+-   `.env` 仅在没有档案或数据库不可用时兜底，属于明文本地文件，界面与 README 明确说明其安全边界。
 -   用户输入和模型输出都不能直接作为命令执行。
 -   在界面说明：为了回答代码问题，相关文件内容或搜索片段可能会发送到所配置的云端模型。
 -   默认忽略 `.env`、私钥、证书、凭据文件及常见敏感配置。
@@ -709,7 +761,9 @@ export type ChatEvent =
 `PATH_NOT_ALLOWED`：路径不在授权范围。 -
 `FILE_TOO_LARGE`：文件超过读取上限。 -
 `FILE_CHANGED`：文件在提案后被外部修改。 -
-`MODEL_CONFIG_ERROR`：模型配置缺失。 -
+`MODEL_CONFIG_ERROR`：模型配置缺失或 Key 无法解密。 -
+`MODEL_PROFILE_NOT_FOUND`：模型档案不存在。 -
+`SECRET_STORAGE_UNAVAILABLE`：系统凭据加密不可用，无法安全保存 Key。 -
 `MODEL_REQUEST_FAILED`：模型调用失败。 -
 `TOOL_EXECUTION_FAILED`：工具执行失败。 -
 `REQUEST_CANCELLED`：用户取消。 - `DATABASE_ERROR`：数据库操作失败。 -
@@ -730,7 +784,8 @@ export type ChatEvent =
 优先覆盖： - 路径规范化和路径穿越防护。 - 文件读取限制。 -
 代码搜索参数构造。 - Git 输出解析。 - Diff 提案状态流转。 -
 原始哈希一致性检查。 - Zod 输入校验。 - Agent 最大轮数和工具错误处理。 -
-SQLite Repository 层的 CRUD 与事务。
+SQLite Repository 层的 CRUD 与事务。 - 模型档案 CRUD、单 active、密钥加解密与 `.env` 兜底。 -
+Base URL 协议规则、OpenAI 兼容适配器与工具开关。
 
 ### 15.2 集成测试
 
@@ -741,7 +796,11 @@ SQLite Repository 层的 CRUD 与事务。
 
 ### 15.3 手工验收
 
--   无 API Key 时能启动并提示配置问题。
+-   无模型档案且无 API Key 时能启动并提示配置问题。
+-   新增模型档案后聊天可用；重启应用后档案与 active 保留。
+-   切换 active 模型后对话与工具调用正常；关闭工具开关后助手声明未读取文件。
+-   删除全部档案后 `.env` 配置仍可对话。
+-   SQLite 中 `api_key_cipher` 为密文，Renderer 与 IPC 返回中不含 Key。
 -   错误 API Key 能显示可理解错误。
 -   用户取消请求后 loading 正常结束。
 -   选择非 Git 文件夹时有合理提示或降级行为。

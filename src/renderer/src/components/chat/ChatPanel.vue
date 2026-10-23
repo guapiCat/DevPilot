@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import ChatComposer from './ChatComposer.vue'
 import MessageList from './MessageList.vue'
+import ModelSwitcher from './ModelSwitcher.vue'
 import { useChatStore } from '@renderer/stores/chat'
 import { useEditStore } from '@renderer/stores/edits'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
@@ -68,14 +69,14 @@ function handleRetry(): void {
       v-if="!aiConfigLoading && !aiConfigured"
       class="panel-alert"
       type="warning"
-      title="尚未配置 DeepSeek API Key"
+      title="尚未配置模型服务"
       show-icon
       :closable="false"
     >
       <template #default>
         请在
         <router-link class="inline-link" :to="{ name: 'settings' }">设置页</router-link>
-        查看配置方式，并在修改 .env 后重启应用。
+        新增模型档案，或填写 .env 后重启应用。
       </template>
     </el-alert>
 
@@ -105,11 +106,15 @@ function handleRetry(): void {
 
     <ChatComposer
       :disabled="!aiConfigured"
-      disabled-hint="请先在设置页配置 DeepSeek API Key"
+      disabled-hint="请先在设置页配置模型服务"
       :generating="isGenerating"
       @send="handleSend"
       @cancel="handleCancel"
-    />
+    >
+      <template #toolbar>
+        <ModelSwitcher />
+      </template>
+    </ChatComposer>
   </div>
 </template>
 

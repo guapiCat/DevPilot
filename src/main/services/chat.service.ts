@@ -19,7 +19,8 @@ import type {
 import type { ErrorCode } from '@shared/types/ipc'
 import { runAgent, type AgentLimits } from '../ai/agent-runner'
 import { createDefaultToolRegistry } from '../ai/tools'
-import { createDeepSeekAdapter, resolveAiConfig } from '../ai/model-manager'
+import { testAdapterConnection } from '../ai/connection-test'
+import { createModelAdapter, resolveAiConfig } from '../ai/model-manager'
 import { ModelAdapterError } from '../ai/model-error'
 import type { ModelAdapter } from '../ai/model-adapter'
 import { buildModelMessages } from '../ai/prompt-builder'
@@ -47,6 +48,7 @@ export interface RepositoryLocator {
 
 export interface ChatServiceOptions {
   adapterFactory?: (config: ResolvedAiConfig) => ModelAdapter
+  configProvider?: () => ResolvedAiConfig
   timeoutMs?: number
   connectionTimeoutMs?: number
   now?: () => Date
@@ -71,6 +73,7 @@ export class ChatService {
   private readonly rememberedOrder: string[] = []
 
   private readonly adapterFactory: (config: ResolvedAiConfig) => ModelAdapter
+  private configProvider: () => ResolvedAiConfig
   private readonly timeoutMs: number
   private readonly connectionTimeoutMs: number
   private readonly now: () => Date
@@ -81,11 +84,12 @@ export class ChatService {
   private readonly agentLimits: Partial<AgentLimits>
 
   constructor(options: ChatServiceOptions = {}) {
-    this.adapterFactory = options.adapterFactory ?? createDeepSeekAdapter
+    this.adapterFactory = options.adapterFactory ?? createModelAdapter
     this.timeoutMs = options.timeoutMs ?? CHAT_REQUEST_TIMEOUT_MS
     this.connectionTimeoutMs = options.connectionTimeoutMs ?? MODEL_CONNECTION_TEST_TIMEOUT_MS
     this.now = options.now ?? (() => new Date())
     this.env = options.env ?? process.env
+    this.configProvider = options.configProvider ?? (() => resolveAiConfig(this.env))
     this.locateRepository = options.locateRepository ?? defaultLocateRepository
     this.toolRegistry = options.toolRegistry ?? null
     this.editService = options.editService ?? null
@@ -94,6 +98,10 @@ export class ChatService {
 
   initialize(store: ChatStore | null): void {
     this.store = store
+  }
+
+  setConfigProvider(provider: () => ResolvedAiConfig): void {
+    this.configProvider = provider
   }
 
   listConversations(): Conversation[] {
@@ -141,7 +149,7 @@ export class ChatService {
   send(input: SendChatInput, sink: ChatEventSink): SendChatResult {
     const store = this.requireStore()
     this.assertStartable(input.requestId)
-    const config = resolveAiConfig(this.env)
+    const config = this.configProvider()
     const conversation = this.requireConversation(input.conversationId)
 
     let userMessage: ChatMessage
@@ -168,7 +176,7 @@ export class ChatService {
   retry(input: RetryChatInput, sink: ChatEventSink): RetryChatResult {
     const store = this.requireStore()
     this.assertStartable(input.requestId)
-    const config = resolveAiConfig(this.env)
+    const config = this.configProvider()
     const conversation = this.requireConversation(input.conversationId)
 
     const hasUserMessage = store
@@ -203,39 +211,11 @@ export class ChatService {
   }
 
   async testConnection(): Promise<AiConnectionTestResult> {
-    const config = resolveAiConfig(this.env)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), this.connectionTimeoutMs)
-    const startedAt = Date.now()
-
-    try {
-      const adapter = this.adapterFactory(config)
-      for await (const event of adapter.stream({
-        messages: [{ role: 'user', content: '请只回复 OK。' }],
-        signal: controller.signal,
-        maxTokens: 8
-      })) {
-        void event
-        if (controller.signal.aborted) break
-      }
-
-      if (controller.signal.aborted) {
-        throw new ServiceError('MODEL_REQUEST_FAILED', '模型连接超时，请检查网络或配置')
-      }
-
-      return { model: config.model, latencyMs: Date.now() - startedAt }
-    } catch (error) {
-      if (controller.signal.aborted) {
-        throw new ServiceError('MODEL_REQUEST_FAILED', '模型连接超时，请检查网络或配置')
-      }
-      if (error instanceof ModelAdapterError) {
-        throw new ServiceError(error.code, error.message)
-      }
-      if (error instanceof ServiceError) throw error
-      throw new ServiceError('MODEL_REQUEST_FAILED', '连接模型服务失败，请稍后重试')
-    } finally {
-      clearTimeout(timer)
-    }
+    const config = this.configProvider()
+    return testAdapterConnection(config, {
+      adapterFactory: this.adapterFactory,
+      timeoutMs: this.connectionTimeoutMs
+    })
   }
 
   private startRun(
@@ -275,7 +255,9 @@ export class ChatService {
     try {
       const store = this.requireStore()
       const conversation = this.requireConversation(run.conversationId)
-      const toolsEnabled = Boolean(this.toolRegistry && conversation.repositoryId)
+      const toolsEnabled = Boolean(
+        this.toolRegistry && conversation.repositoryId && config.toolsEnabled
+      )
       const messages = buildModelMessages(
         store.listRecentMessages(conversation.id, CHAT_HISTORY_MAX_MESSAGES),
         {

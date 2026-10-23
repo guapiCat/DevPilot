@@ -38,15 +38,18 @@ function submit(): void {
       @keydown.enter.exact.prevent="submit"
     />
     <div class="footer">
-      <span class="hint">
-        {{
-          disabled
-            ? disabledHint
-            : generating
-              ? '正在生成，可先停止或等待'
-              : 'Enter 发送 · Shift + Enter 换行'
-        }}
-      </span>
+      <div class="footer-left">
+        <slot name="toolbar" />
+        <span class="hint">
+          {{
+            disabled
+              ? disabledHint
+              : generating
+                ? '正在生成，可先停止或等待'
+                : 'Enter 发送 · Shift + Enter 换行'
+          }}
+        </span>
+      </div>
       <el-button v-if="generating" type="danger" plain @click="emit('cancel')">
         <el-icon><CircleClose /></el-icon>
         <span>停止</span>
@@ -91,9 +94,24 @@ function submit(): void {
   margin-top: 10px;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
 .hint {
   color: var(--dp-text-muted);
   font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.el-button {
+  flex: none;
 }
 
 .el-button .el-icon {

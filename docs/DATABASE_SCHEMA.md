@@ -1,8 +1,8 @@
 # DevPilot 数据库表结构
 
-> 适用范围：V1（阶段 1–6 已实现部分）
+> 适用范围：V1（阶段 1–6 已实现部分 + 多模型档案）
 > 事实来源：`src/main/database/database.ts` 的迁移定义
-> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013）、[SECURITY.md](SECURITY.md)
+> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013、ADR-016）、[SECURITY.md](SECURITY.md)
 
 ## 1. 数据库位置与连接
 
@@ -14,19 +14,19 @@
   - `busy_timeout = 5000`：遇到锁时最多等待 5 秒。
 - 应用启动时打开并迁移；退出时（`will-quit`）关闭连接。
 - 初始化失败不会阻断启动，只是本次运行不持久化仓库与对话信息（内存模式）。
-- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；阶段 6 起写入 `edit_sessions` 与 `file_edits`，保存 AI 修改提案。
+- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；阶段 6 起写入 `edit_sessions` 与 `file_edits`，保存 AI 修改提案；多模型档案功能起写入 `model_profiles`（API Key 仅保存 `safeStorage` 密文）。
 
 ## 2. 迁移机制
 
-迁移定义在 `src/main/database/database.ts` 的 `MIGRATIONS` 数组中，当前为 v2。
+迁移定义在 `src/main/database/database.ts` 的 `MIGRATIONS` 数组中，当前为 v3。
 
 ```text
-user_version = 0 ──MIGRATIONS[0]──▶ 1 ──MIGRATIONS[1]──▶ 2
+user_version = 0 ──MIGRATIONS[0]──▶ 1 ──MIGRATIONS[1]──▶ 2 ──MIGRATIONS[2]──▶ 3
 ```
 
 v2 内容：`ALTER TABLE messages ADD COLUMN tool_calls TEXT;`，用于保存工具调用摘要，不改动既有数据。
 
-阶段 6 复用 v1 已创建的 `edit_sessions` / `file_edits` 表，**不需要新增迁移**，`user_version` 仍为 2。
+v3 内容：新增 `model_profiles` 表与两个索引（见 4.6），不动既有表。阶段 6 复用 v1 已创建的 `edit_sessions` / `file_edits` 表，不需要迁移。
 
 规则：
 
@@ -45,6 +45,10 @@ const MIGRATIONS: readonly Migration[] = [
   (db) => {
     // v2：为 assistant 消息增加工具调用摘要列
     db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT;')
+  },
+  (db) => {
+    // v3：新增模型档案表（API Key 只保存 safeStorage 密文）
+    db.exec('CREATE TABLE model_profiles (...);')
   }
 ]
 ```
@@ -190,31 +194,68 @@ repositories
 - 单会话最多 20 个文件；同一路径（不区分大小写）在会话内只允许存在一条 `proposed`/`stale`/`applied` 记录，`rejected` 后可重新提案。
 - 提案内容是本地审核数据：只保存被提议的单个文件，不保存整仓内容；不会因为写入提案而上传数据。
 
+### 4.6 model_profiles — 模型档案（多模型功能使用）
+
+保存用户在设置页配置的模型服务。全局同一时间只有一个 `is_active = 1` 的档案；无档案或数据库不可用时回退到 `.env`。
+
+| 列               | 类型    | 约束               | 说明                                             |
+| ---------------- | ------- | ------------------ | ------------------------------------------------ |
+| `id`             | TEXT    | PRIMARY KEY        | UUID                                             |
+| `name`           | TEXT    | NOT NULL           | 档案名称（1–40 字符）                            |
+| `provider`       | TEXT    | NOT NULL           | `deepseek` 或 `openai-compatible`                |
+| `base_url`       | TEXT    | NOT NULL           | 服务地址，保存前由 Zod 校验协议与长度            |
+| `model`          | TEXT    | NOT NULL           | 模型 ID（1–120 字符）                            |
+| `api_key_cipher` | TEXT    | 可空               | `safeStorage` 密文的 base64；NULL 表示未设置 Key |
+| `tools_enabled`  | INTEGER | NOT NULL DEFAULT 1 | 是否启用代码理解工具（1/0）                      |
+| `is_active`      | INTEGER | NOT NULL DEFAULT 0 | 是否为全局当前模型（1/0）                        |
+| `created_at`     | TEXT    | NOT NULL           | 创建时间（ISO 8601 UTC）                         |
+| `updated_at`     | TEXT    | NOT NULL           | 最近更新时间；删除 active 后按它提升剩余档案     |
+
+索引：
+
+- `ux_model_profiles_active`：`UNIQUE (is_active) WHERE is_active = 1`，用部分唯一索引在数据库层保证最多一个 active。
+- `idx_model_profiles_updated_at (updated_at DESC)`：按最近更新排序与提升。
+
+写入规则：
+
+- 新增首个档案自动设为 active；新增上限 20 个。
+- 切换 active 在事务内先清零全部 `is_active`，再置目标行，避免中途违反唯一索引。
+- 删除 active 档案时，同一事务把 `updated_at` 最新的剩余档案设为 active；删光后无 active，回退 `.env`。
+- 启动时若存在档案但无 active（异常数据），自动激活最近更新的一条。
+- 更新档案时 API Key 留空表示保留旧密文；界面与 IPC 只返回 `hasApiKey`，不回显 Key 或密文。
+- `api_key_cipher` 只保存 Electron `safeStorage`（Windows DPAPI）加密后的 base64；系统加密不可用时拒绝保存带 Key 的档案。
+- 读取 active 档案时解密失败返回 `MODEL_CONFIG_ERROR`，提示用户在设置页重新填写。
+- `openai-compatible` 允许空 Key（本地 Ollama 等），适配器使用占位 Key `not-needed`；`deepseek` 必须配置 Key。
+
 ## 5. 索引汇总
 
-| 索引名                           | 表            | 列                                 | 用途               |
-| -------------------------------- | ------------- | ---------------------------------- | ------------------ |
-| `idx_repositories_updated_at`    | repositories  | `updated_at DESC`                  | 最近使用仓库排序   |
-| `idx_conversations_repository`   | conversations | `repository_id, updated_at DESC`   | 按仓库列会话       |
-| `idx_messages_conversation`      | messages      | `conversation_id, created_at`      | 按会话顺序读消息   |
-| `idx_edit_sessions_conversation` | edit_sessions | `conversation_id, updated_at DESC` | 按对话查编辑会话   |
-| `idx_edit_sessions_repository`   | edit_sessions | `repository_id, updated_at DESC`   | 按仓库查编辑会话   |
-| `idx_file_edits_session`         | file_edits    | `edit_session_id`                  | 按会话读逐文件提案 |
+| 索引名                           | 表             | 列                                             | 用途               |
+| -------------------------------- | -------------- | ---------------------------------------------- | ------------------ |
+| `idx_repositories_updated_at`    | repositories   | `updated_at DESC`                              | 最近使用仓库排序   |
+| `idx_conversations_repository`   | conversations  | `repository_id, updated_at DESC`               | 按仓库列会话       |
+| `idx_messages_conversation`      | messages       | `conversation_id, created_at`                  | 按会话顺序读消息   |
+| `idx_edit_sessions_conversation` | edit_sessions  | `conversation_id, updated_at DESC`             | 按对话查编辑会话   |
+| `idx_edit_sessions_repository`   | edit_sessions  | `repository_id, updated_at DESC`               | 按仓库查编辑会话   |
+| `idx_file_edits_session`         | file_edits     | `edit_session_id`                              | 按会话读逐文件提案 |
+| `ux_model_profiles_active`       | model_profiles | `is_active`（部分唯一，`WHERE is_active = 1`） | 保证唯一 active    |
+| `idx_model_profiles_updated_at`  | model_profiles | `updated_at DESC`                              | 最近更新排序与提升 |
 
 ## 6. 代码接入与数据访问
 
-| 模块                                       | 职责                                                                             |
-| ------------------------------------------ | -------------------------------------------------------------------------------- |
-| `src/main/database/database.ts`            | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                |
-| `src/main/database/repository.store.ts`    | 仓库表 SQL：`list` / `findByPath` / `insert` / `touch`                           |
-| `src/main/database/chat.store.ts`          | 会话/消息表 SQL：列表、插入、标题生成、工具摘要 JSON、最近消息读取（全部参数化） |
-| `src/main/database/edit.store.ts`          | 编辑提案表 SQL：会话/文件提案插入、按状态查询、状态更新、路径去重与计数          |
-| `src/main/services/repository.service.ts`  | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR` |
-| `src/main/services/chat.service.ts`        | 业务层：会话创建、发送/重试/取消、Agent 循环、流式与工具事件、错误映射、连接测试 |
-| `src/main/services/edit.service.ts`        | 业务层：提案校验与持久化、应用/拒绝、哈希复核、`stale`/`failed` 标记与会话收尾   |
-| `src/main/index.ts`                        | 生命周期：启动打开并迁移，初始化两个 Store，`will-quit` 取消请求后关闭连接       |
-| `src/main/ipc/*`                           | 通过 service 间接访问，不直接接触连接                                            |
-| `src/renderer/src/services/desktop-api.ts` | 经 IPC 调用 `repository.list()` / `chat.send()` 等，无数据库能力                 |
+| 模块                                         | 职责                                                                             |
+| -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/main/database/database.ts`              | 打开数据库、设置 PRAGMA、执行 `user_version` 迁移                                |
+| `src/main/database/repository.store.ts`      | 仓库表 SQL：`list` / `findByPath` / `insert` / `touch`                           |
+| `src/main/database/chat.store.ts`            | 会话/消息表 SQL：列表、插入、标题生成、工具摘要 JSON、最近消息读取（全部参数化） |
+| `src/main/database/edit.store.ts`            | 编辑提案表 SQL：会话/文件提案插入、按状态查询、状态更新、路径去重与计数          |
+| `src/main/database/model-profile.store.ts`   | 模型档案表 SQL：CRUD、active 切换、删除后提升、单 active 事务                    |
+| `src/main/services/model-profile.service.ts` | 业务层：档案 CRUD、状态组装、`.env` 兜底、密钥加密/解密、草稿连接测试配置        |
+| `src/main/services/repository.service.ts`    | 业务层：启动时 `initialize(store)` 读入内存，登记时写库，异常转 `DATABASE_ERROR` |
+| `src/main/services/chat.service.ts`          | 业务层：会话创建、发送/重试/取消、Agent 循环、流式与工具事件、错误映射、连接测试 |
+| `src/main/services/edit.service.ts`          | 业务层：提案校验与持久化、应用/拒绝、哈希复核、`stale`/`failed` 标记与会话收尾   |
+| `src/main/index.ts`                          | 生命周期：启动打开并迁移，初始化两个 Store，`will-quit` 取消请求后关闭连接       |
+| `src/main/ipc/*`                             | 通过 service 间接访问，不直接接触连接                                            |
+| `src/renderer/src/services/desktop-api.ts`   | 经 IPC 调用 `repository.list()` / `chat.send()` 等，无数据库能力                 |
 
 设计约定：
 
@@ -223,7 +264,7 @@ repositories
 - 数据库列名用 `snake_case`，TypeScript 记录对象用 `camelCase`，由 Store 的 `toRecord` 映射。
 - 时间统一存 ISO 8601 UTC 字符串，排序直接使用字符串比较。
 - ID 统一为 UUID 字符串，由主进程生成。
-- 不保存 API Key、工具输出正文或 Git 命令输出；当前保存仓库元数据、会话、消息、工具调用摘要，以及 AI 修改提案中被提议文件的原始/建议内容（用于 Diff 审核与重启恢复）。
+- 不保存 API Key 明文、工具输出正文或 Git 命令输出；模型档案的 API Key 只保存 `safeStorage` 密文的 base64。当前保存仓库元数据、会话、消息、工具调用摘要、AI 修改提案中被提议文件的原始/建议内容（用于 Diff 审核与重启恢复），以及模型档案配置。
 
 ## 7. 常用查询
 
@@ -256,16 +297,29 @@ FROM messages
 WHERE conversation_id = ?
 ORDER BY created_at DESC, rowid DESC
 LIMIT ?;
+
+-- 当前激活的模型档案（不读取 api_key_cipher 明文）
+SELECT id, name, provider, base_url, model, tools_enabled, updated_at
+FROM model_profiles
+WHERE is_active = 1
+LIMIT 1;
+
+-- 设置页列表：active 优先，其余按最近更新
+SELECT id, name, provider, base_url, model, tools_enabled, is_active,
+       (api_key_cipher IS NOT NULL) AS has_api_key, updated_at
+FROM model_profiles
+ORDER BY is_active DESC, updated_at DESC, rowid DESC;
 ```
 
 ## 8. 与阶段计划的对应关系
 
-| 表              | 当前状态 | 使用阶段 |
-| --------------- | -------- | -------- |
-| `repositories`  | 已使用   | 阶段 3   |
-| `conversations` | 已使用   | 阶段 4   |
-| `messages`      | 已使用   | 阶段 4–5 |
-| `edit_sessions` | 已使用   | 阶段 6   |
-| `file_edits`    | 已使用   | 阶段 6   |
+| 表               | 当前状态 | 使用阶段       |
+| ---------------- | -------- | -------------- |
+| `repositories`   | 已使用   | 阶段 3         |
+| `conversations`  | 已使用   | 阶段 4         |
+| `messages`       | 已使用   | 阶段 4–5       |
+| `edit_sessions`  | 已使用   | 阶段 6         |
+| `file_edits`     | 已使用   | 阶段 6         |
+| `model_profiles` | 已使用   | 多模型配置功能 |
 
-验收覆盖：迁移幂等、5 张表与 6 个索引、v1→v2 升级保留旧数据、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新、`tool_calls` JSON 往返与损坏容错、跨重启恢复见 `tests/unit/main/chat.store.test.ts`；提案会话分组、文件上限、重复路径、`original_hash=''`、应用/拒绝状态流转、外部修改标记 `stale` 与会话收尾见 `tests/unit/main/edit.service.test.ts`。
+验收覆盖：迁移幂等、6 张表与 8 个索引、v1→v3 升级保留旧数据、外键非法引用、删除仓库的 `SET NULL` / `CASCADE`、参数化 SQL 与跨重启恢复，见 `tests/unit/main/database.test.ts`；会话排序、消息顺序、首条标题、`updated_at` 刷新、`tool_calls` JSON 往返与损坏容错、跨重启恢复见 `tests/unit/main/chat.store.test.ts`；提案会话分组、文件上限、重复路径、`original_hash=''`、应用/拒绝状态流转、外部修改标记 `stale` 与会话收尾见 `tests/unit/main/edit.service.test.ts`；档案 CRUD、单 active、删除后提升与事务回滚见 `tests/unit/main/model-profile.store.test.ts`；首个档案自动激活、空 Key 保留、密文不泄漏、`.env` 兜底、加密不可用与解密失败见 `tests/unit/main/model-profile.service.test.ts`。

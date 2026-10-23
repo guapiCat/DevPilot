@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { AiConfigStatus } from '@shared/types/app'
 import type { ChatEvent, ChatMessage, ChatMessageStatus, Conversation } from '@shared/types/chat'
 import type { ToolCallRecord } from '@shared/types/tool'
 import { desktopApi } from '@renderer/services/desktop-api'
@@ -23,11 +24,13 @@ export const useChatStore = defineStore('chat', () => {
   const retryConversationId = ref<string | null>(null)
   const isCreatingConversation = ref(false)
   const deletingConversationId = ref<string | null>(null)
-  const aiConfigured = ref(true)
+  const aiStatus = ref<AiConfigStatus | null>(null)
+  const aiConfigured = computed(() => aiStatus.value?.configured ?? true)
   const aiConfigLoading = ref(true)
   const initialized = ref(false)
 
   let pending: PendingRun | null = null
+  let configToken = 0
   let selectToken = 0
 
   const activeConversation = computed(
@@ -231,14 +234,25 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadAiConfig(): Promise<void> {
+    const token = ++configToken
     try {
       const status = await desktopApi.settings.getAiConfigStatus()
-      aiConfigured.value = status.configured
+      if (token !== configToken) return
+      aiStatus.value = status
     } catch (error) {
       errorMessage.value = toErrorMessage(error)
     } finally {
       aiConfigLoading.value = false
     }
+  }
+
+  async function activateModelProfile(profileId: string): Promise<AiConfigStatus> {
+    const token = ++configToken
+    const status = await desktopApi.settings.activateModelProfile(profileId)
+    if (token === configToken) {
+      aiStatus.value = status
+    }
+    return status
   }
 
   async function initialize(): Promise<void> {
@@ -433,6 +447,7 @@ export const useChatStore = defineStore('chat', () => {
     retryConversationId,
     isCreatingConversation,
     deletingConversationId,
+    aiStatus,
     aiConfigured,
     aiConfigLoading,
     activeConversation,
@@ -443,6 +458,7 @@ export const useChatStore = defineStore('chat', () => {
     clearError,
     initialize,
     loadAiConfig,
+    activateModelProfile,
     refreshConversations,
     createConversation,
     deleteConversation,

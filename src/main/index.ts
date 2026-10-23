@@ -4,10 +4,13 @@ import icon from '../../resources/icon.png?asset'
 import { ChatStore } from './database/chat.store'
 import { openDatabase } from './database/database'
 import { EditStore } from './database/edit.store'
+import { ModelProfileStore } from './database/model-profile.store'
 import { RepositoryStore } from './database/repository.store'
 import { registerIpcHandlers } from './ipc'
+import { ElectronSecretCipher } from './security/electron-secret-cipher'
 import { chatService } from './services/chat.service'
 import { editService } from './services/edit.service'
+import { initModelProfileService } from './services/model-profile.service'
 import { repositoryService } from './services/repository.service'
 import { loadEnvFiles } from './utils/env'
 
@@ -95,18 +98,25 @@ if (!hasSingleInstanceLock) {
     ])
     console.info(`[env] 已加载 ${loadedEnvFiles.length} 个配置文件`)
 
+    const modelProfileService = initModelProfileService({
+      cipher: new ElectronSecretCipher()
+    })
+
     try {
       database = openDatabase(app.getPath('userData'))
       repositoryService.initialize(new RepositoryStore(database))
       chatService.initialize(new ChatStore(database))
       editService.initialize(new EditStore(database))
+      modelProfileService.initialize(new ModelProfileStore(database))
       console.info('[db] SQLite 已就绪')
     } catch {
       database = null
       editService.initialize(null)
+      modelProfileService.initialize(null)
       console.error('[db] SQLite 初始化失败，本次运行不会持久化仓库信息')
     }
 
+    chatService.setConfigProvider(() => modelProfileService.resolveActive())
     registerIpcHandlers()
     createWindow()
 
