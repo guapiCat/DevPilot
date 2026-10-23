@@ -146,6 +146,7 @@
 - [x] Element Plus 手动按需注册，移除全量 JS 与全量 CSS。
 - [x] highlight.js 改为 `lib/core` + 显式注册 28 种常用语言。
 - [x] AI 建议计数按当前仓库过滤；展开面板自动刷新；刷新/错误时保留既有列表。
+- [x] 审核入口强化与变更导航：“去审核”改为填充主按钮并强制切到“AI 建议”标签；支持跨文件（`Alt+Shift+↑/↓`）与文件内差异（`Alt+↑/↓`）的上一个/下一个导航，打开建议自动定位首处差异，应用/拒绝后自动选中相邻项。
 - [x] 对话自动滚动（仅用户接近底部时）、错误提示可关闭、生成中提示、工具卡展开/收起文案。
 - [x] Ctrl+S 仅在编辑器与页面级触发，不拦截对话输入框。
 - [x] 主题对比度提升与 1080px 窄窗口布局调整。
@@ -156,6 +157,7 @@
 - `main.ts` 只注册实际使用的 Element Plus 组件与对应样式，语言包由 `App.vue` 的 `el-config-provider` 提供。
 - `utils/markdown.ts` 使用 `highlight.js/lib/core` 注册 28 种语言，未注册语言回退为转义纯文本。
 - AI 建议面板新增按当前仓库过滤的计数、展开时刷新、刷新中的轻量提示；计数归零时自动回到 Git 标签。“去审核”会先刷新待审核列表再选中首项。
+- `DiffPanel` 的标签模式迁入 `workspace` store（`null` 表示按待审核数量自动），`ChatPanel` 的“去审核”通过 `showDiffPanel('proposals')` 强制切换。`ProposalReview` 按当前仓库展平建议并在详情头提供位置指示与前后文件按钮，快捷键忽略输入框与 Monaco 焦点；`ProposalDiffView` 使用 Monaco `getLineChanges` / `goToDiff` / `revealFirstDiff` 提供文件内差异导航。
 - 对话列表仅在用户接近底部时自动滚动，发送新消息时强制滚到底部；消息容器增加 `role="log"` 与 `aria-live`。
 
 构建对比（electron-vite 产物，未压缩大小）：
@@ -195,8 +197,8 @@
 
 验证结果：
 
-- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test`（34 个测试文件、344 个用例通过、2 个跳过）、`npm run build` 通过。
-- 新增测试：v3 迁移与索引、`ModelProfileStore` CRUD/单 active/删除提升/事务回滚、`ModelProfileService`（自动激活、空 Key 保留、密文不泄漏、`.env` 兜底、加密不可用、解密失败、草稿 Key 优先级）、OpenAI 适配器与工厂分派、Base URL/长度/uuid 的 Zod 规则、`ChatService` 的 `configProvider` 与 `toolsEnabled=false`、chat store 的配置加载/快捷切换/慢响应竞态。
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test`（35 个测试文件、348 个用例通过、2 个跳过）、`npm run build` 通过。
+- 新增测试：v3 迁移与索引、`ModelProfileStore` CRUD/单 active/删除提升/事务回滚、`ModelProfileService`（自动激活、空 Key 保留、密文不泄漏、`.env` 兜底、加密不可用、解密失败、草稿 Key 优先级）、OpenAI 适配器与工厂分派、Base URL/长度/uuid 的 Zod 规则、`ChatService` 的 `configProvider` 与 `toolsEnabled=false`、chat store 的配置加载/快捷切换/慢响应竞态、审核导航工具的展平顺序与相邻项边界。
 - 未覆盖：真实 DPAPI 跨重启解密、真实模型档案切换与工具开关的 Electron 人工验收，需本机 Key；Playwright 设置页与对话模型切换冒烟已完成（静态产物 + mock），删光档案回退 `.env`、激活失败回退与深浅色样式均已验证。
 
 ## 阶段 7：稳定性与交付

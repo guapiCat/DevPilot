@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { DocumentChecked } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import ChatComposer from './ChatComposer.vue'
@@ -33,14 +34,13 @@ const {
 const { totalCount } = storeToRefs(edits)
 
 async function goReview(): Promise<void> {
-  workspace.diffPanelVisible = true
+  workspace.showDiffPanel('proposals')
 
   if (route.name !== 'workspace') {
     void router.push({ name: 'workspace' })
   }
 
   await edits.loadPending(chat.activeConversationId)
-  edits.selectFirst()
 }
 
 function handleSend(content: string): void {
@@ -83,15 +83,23 @@ function handleRetry(): void {
     <el-alert
       v-if="totalCount > 0"
       class="panel-alert edit-alert"
-      type="info"
+      type="warning"
       show-icon
       :closable="false"
     >
       <template #title>
-        <span>有 {{ totalCount }} 个文件修改建议待审核</span>
-        <el-button link type="primary" size="small" class="review-link" @click="goReview">
-          去审核
-        </el-button>
+        <span class="edit-alert-row">
+          <span>有 {{ totalCount }} 个文件修改建议待审核</span>
+          <el-button
+            class="review-btn"
+            type="primary"
+            size="small"
+            :icon="DocumentChecked"
+            @click="goReview"
+          >
+            去审核
+          </el-button>
+        </span>
       </template>
     </el-alert>
 
@@ -140,8 +148,25 @@ function handleRetry(): void {
   color: var(--dp-text-secondary);
 }
 
-.review-link {
-  margin-left: 8px;
+.edit-alert :deep(.el-alert__content) {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-alert :deep(.el-alert__title) {
+  width: 100%;
+  line-height: 20px;
+}
+
+.edit-alert-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.review-btn {
+  margin-left: auto;
 }
 
 .is-compact .panel-alert {

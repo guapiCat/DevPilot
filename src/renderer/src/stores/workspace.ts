@@ -2,11 +2,14 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { FileContent } from '@shared/types/repository'
 
+export type DiffPanelMode = 'proposals' | 'git'
+
 export const useWorkspaceStore = defineStore('workspace', () => {
   const openTabs = ref<string[]>([])
   const activeFilePath = ref<string | null>(null)
   const rightPanelVisible = ref(true)
   const diffPanelVisible = ref(false)
+  const diffPanelMode = ref<DiffPanelMode | null>(null)
   const selectedEditProposalId = ref<string | null>(null)
   const fileContents = ref<Record<string, FileContent>>({})
   const fileErrors = ref<Record<string, string>>({})
@@ -40,6 +43,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function toggleDiffPanel(): void {
     diffPanelVisible.value = !diffPanelVisible.value
+  }
+
+  function showDiffPanel(mode: DiffPanelMode | null = null): void {
+    if (mode) diffPanelMode.value = mode
+    diffPanelVisible.value = true
   }
 
   function selectEditProposal(id: string | null): void {
@@ -102,6 +110,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     activeFilePath,
     rightPanelVisible,
     diffPanelVisible,
+    diffPanelMode,
     selectedEditProposalId,
     fileContents,
     fileErrors,
@@ -113,6 +122,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     toggleRightPanel,
     toggleDiffPanel,
+    showDiffPanel,
     selectEditProposal,
     setFileContent,
     setFileError,

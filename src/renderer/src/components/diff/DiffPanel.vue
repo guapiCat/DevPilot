@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { Close, Document, Files, Refresh } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import type { AppliedFileEdit } from '@shared/types/edit'
@@ -9,6 +9,7 @@ import ProposalReview from '@renderer/components/diff/ProposalReview.vue'
 import { useChatStore } from '@renderer/stores/chat'
 import { useEditStore } from '@renderer/stores/edits'
 import { useRepositoryStore } from '@renderer/stores/repository'
+import type { DiffPanelMode } from '@renderer/stores/workspace'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
 
 const MAX_RENDERED_DIFF_LINES = 4000
@@ -47,8 +48,6 @@ const {
   gitChangeCount
 } = storeToRefs(repository)
 
-type PanelMode = 'proposals' | 'git'
-
 const visibleTotalCount = computed(() =>
   activeRepository.value
     ? sessions.value.reduce(
@@ -59,11 +58,15 @@ const visibleTotalCount = computed(() =>
     : totalCount.value
 )
 
-const mode = ref<PanelMode>(visibleTotalCount.value > 0 ? 'proposals' : 'git')
+const mode = computed<DiffPanelMode>(
+  () => workspace.diffPanelMode ?? (visibleTotalCount.value > 0 ? 'proposals' : 'git')
+)
 
 watch(visibleTotalCount, (count, previous) => {
-  if (count > 0 && previous === 0) mode.value = 'proposals'
-  else if (count === 0 && previous > 0 && mode.value === 'proposals') mode.value = 'git'
+  if (count > 0 && previous === 0) workspace.diffPanelMode = 'proposals'
+  else if (count === 0 && previous > 0 && mode.value === 'proposals') {
+    workspace.diffPanelMode = 'git'
+  }
 })
 
 watch(
@@ -160,7 +163,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             type="button"
             class="panel-tab"
             :class="{ active: mode === 'proposals' }"
-            @click="mode = 'proposals'"
+            @click="workspace.diffPanelMode = 'proposals'"
           >
             AI 建议
             <span v-if="visibleTotalCount > 0" class="tab-count">{{ visibleTotalCount }}</span>
@@ -169,7 +172,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             type="button"
             class="panel-tab"
             :class="{ active: mode === 'git' }"
-            @click="mode = 'git'"
+            @click="workspace.diffPanelMode = 'git'"
           >
             Git 变更
             <span v-if="gitChangeCount > 0" class="tab-count">{{ gitChangeCount }}</span>

@@ -2,11 +2,8 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { ApplyFileEditResult, EditSession, FileEdit } from '@shared/types/edit'
 import { desktopApi } from '@renderer/services/desktop-api'
+import { editFileKey } from '@renderer/utils/edits'
 import { toErrorMessage } from '@renderer/utils/errors'
-
-export function editFileKey(editSessionId: string, fileEditId: string): string {
-  return `${editSessionId}:${fileEditId}`
-}
 
 export const useEditStore = defineStore('edits', () => {
   const sessions = ref<EditSession[]>([])
