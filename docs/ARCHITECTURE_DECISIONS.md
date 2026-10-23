@@ -117,7 +117,7 @@
 - `electron-vite` 主进程启用 `externalizeDepsPlugin()`，让 `better-sqlite3` 保持为外部 `require`，避免 Rollup 处理原生 `.node`。
 - 数据库初始化失败时应用仍可启动，`RepositoryService` 退回内存模式；日志只记录失败事实，不输出路径或数据内容。
 
-**影响**：仓库列表跨启动保留，工作区启动时自动载入最近仓库。原生模块在 `electron-builder` 打包时需要 `asarUnpack` 并验证安装包内加载（阶段 7 待办）。若未来需要事务型后台任务或复杂查询，可继续在同一连接上扩展，无需更换驱动。
+**影响**：仓库列表跨启动保留，工作区启动时自动载入最近仓库。原生模块在 `electron-builder` 打包时通过 `asarUnpack` 解包，安装包内加载已在阶段 7 验证（ADR-017）。若未来需要事务型后台任务或复杂查询，可继续在同一连接上扩展，无需更换驱动。
 
 ## ADR-012：使用 LangChain.js 接入 DeepSeek，并采用固定事件协议
 
@@ -153,7 +153,7 @@
 - 消息表新增 `tool_calls` JSON 列（v2 迁移），只保存工具名、参数摘要、状态、结果摘要与耗时，不保存工具输出正文、文件内容、搜索片段或 Git Diff；Renderer 解析失败时降级为空，不影响历史加载。
 - 事件协议新增非终态 `tool_started` / `tool_finished`，仍走固定 `chat:event` channel；`completed` / `cancelled` / `error` 的单一终态语义不变。工具事件同时由对话页与工作区 AI 面板消费，二者共享同一 Pinia chat store。
 
-**影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。`search_code` 默认使用随包内置 ripgrep，不依赖系统安装；安装包需将 `@vscode/ripgrep` 的二进制目录加入 asarUnpack（阶段 7 验证）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。
+**影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。`search_code` 默认使用随包内置 ripgrep，不依赖系统安装；安装包已将 `@vscode/ripgrep` 的二进制目录加入 asarUnpack，并在运行时映射到 `app.asar.unpacked`（阶段 7 已验证，见 ADR-017）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。
 
 ## ADR-014：AI 修改采用“精确替换提案 + 用户逐文件确认”
 
@@ -205,3 +205,18 @@
 - **连接测试**：抽出 `testAdapterConnection()` 供 `ChatService.testConnection()` 与设置页草稿测试共用；草稿 Key 只在单次 IPC 中传输，编辑已有档案留空则主进程复用密文。
 
 **影响**：用户可在设置页新增、切换、删除模型档案，重启后保留；API Key 不再要求写入 `.env`。引入 `@langchain/openai` 作为直接依赖，版本固定为 1.6.3（1.7.0 要求 `@langchain/core ^1.3.0`，而当前 core 为 1.2.20）。所有 OpenAI 兼容服务共用同一流式/工具代码路径，新增服务商通常只需增加预设。`safeStorage` 只在 `app.whenReady()` 后可用，因此服务在主进程装配阶段延迟初始化；数据库不可用时整个档案功能降级到 `.env`。已知限制：无法防御已取得当前 Windows 用户权限的攻击者；模型档案是全局配置，暂不支持按会话选择。
+
+## ADR-017：electron-builder 打包 Windows NSIS 安装包
+
+**背景**：阶段 7 需要产出可在无开发环境机器上安装运行的 Windows 安装包，并验证原生模块与随包 ripgrep。本机 npm 为 6.14.5、无 MSVC 构建环境，Electron 与 electron-builder 辅助工具的下载还受网络与全局旧镜像影响。
+
+**决策**：
+
+- 使用 electron-builder 25.1.8，NSIS 辅助安装（`oneClick: false`、`allowToChangeInstallationDirectory: true`）。26.x 的新依赖收集器会把 `@vscode/ripgrep` 在 `dependencies` 中声明的所有平台包视为必需，在未安装非本平台可选依赖时打包失败。
+- `files` 使用显式白名单，只包含 `out/`、`resources/` 与 `package.json`；生产依赖由 electron-builder 自动收集。避免历史构建目录被打进 `app.asar`（曾出现 2.1 GB 的 asar）。
+- `npmRebuild: false`：better-sqlite3 13 为 N-API 预编译，不需要 electron-rebuild；`asarUnpack` 解包 `better-sqlite3/prebuilds` 与 `@vscode/ripgrep-win32-x64/bin`。
+- `resolveRgCommand()` 在检测到 `app.asar` 路径时改写为 `app.asar.unpacked` 再启动 `rg.exe`；开发环境仍从 `node_modules` 解析。
+- 项目 `.npmrc` 显式提供 `electron-mirror` 与 `electron_builder_binaries_mirror`，优先于本机全局旧镜像。
+- Windows 未开启开发者模式时，`winCodeSign` 压缩包内的 macOS 符号链接无法解压；README 记录开启开发者模式或预置缓存的替代步骤。
+
+**影响**：`npm run build:win` 产出 `dist/DevPilot-<version>-setup.exe`；`npm run pack:win` 产出免安装目录。打包后已验证 better-sqlite3（SQLite 3.53.4）与内置 ripgrep（15.0.0）可用。安装包未签名；当前 electron-builder 版本与 npm 6 的依赖收集行为绑定，升级 npm 或 electron-builder 时需重新验证依赖收集与原生模块。

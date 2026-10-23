@@ -72,7 +72,7 @@
 - SQLite 验证：`openDatabase` 在临时目录创建数据库并校验 `user_version`、5 张基础表、6 个索引、WAL 与 `foreign_keys`；仓储层覆盖排序、路径查找、更新时间刷新与参数化 SQL；外键覆盖非法引用和删除仓库时的 `SET NULL` / `CASCADE`；`RepositoryService` 覆盖登记写库、重启恢复与重复登记刷新时间。真实 Electron 44 构建产物启动后确认 `%APPDATA%\DevPilot\devpilot.db` 创建、`user_version = 1` 且 5 张表存在。
 - 仓库自动恢复验证：渲染层（Playwright + 预加载 API mock）在存在持久化仓库列表且未选择仓库时，挂载后自动载入最近仓库、文件树与分支，无需点击“选择仓库”。
 - 待补充：真实 Electron 窗口中选择仓库后手动保存与 Git 面板的人工验收，随阶段 7 最终验收清单执行。
-- 待补充：安装包内 better-sqlite3 的加载验证（阶段 7）。
+- 安装包验证：`dist/win-unpacked` 启动后正常创建 `%APPDATA%\DevPilot\devpilot.db`；以打包后的 Electron 直接加载 `app.asar` 内的 `better-sqlite3`，SQLite 3.53.4 可用。内置 `rg.exe` 从 `app.asar.unpacked` 启动并返回 ripgrep 15.0.0。
 - Monaco 集成验证：开发模式下 TS/CSS/HTML/JSON Worker 均正常加载；生产构建通过 `file://` 加载时 Monaco 正常渲染、Worker 成功启动且无控制台错误；多标签切换、关闭全部标签后回到空状态、重新打开文件均正常。
 
 ## 阶段 4：AI 对话（已完成）
@@ -204,12 +204,20 @@
 ## 阶段 7：稳定性与交付
 
 - [ ] 补齐单元与集成测试。
-- [ ] electron-builder Windows 安装包。
-- [ ] better-sqlite3 原生模块打包验证。
+- [x] electron-builder Windows 安装包（NSIS 辅助安装，`npm run build:win`）。
+- [x] better-sqlite3 原生模块打包验证。
 - [x] ripgrep 随包分发：`@vscode/ripgrep` 内置 `rg`，支持 `DEV_PILOT_RG_PATH` 覆盖。
-- [ ] 安装包内 `@vscode/ripgrep` 的 asarUnpack 配置与运行验证。
+- [x] 安装包内 `@vscode/ripgrep` 的 asarUnpack 配置与运行验证。
 - [ ] README、安装、配置与安全说明完善。
 - [ ] V1 最终验收清单逐项验证。
+
+实现要点：
+
+- `electron-builder.yml` 使用显式 `files` 白名单（`out/`、`resources/`、`package.json`），避免把 `dist*` 等构建产物打进 `app.asar`。
+- `asarUnpack` 解包 `better-sqlite3/prebuilds` 与 `@vscode/ripgrep-win32-x64/bin`；`npmRebuild: false`，N-API 预编译二进制无需重建。
+- `resolveRgCommand()` 在打包环境把 `app.asar` 路径映射为 `app.asar.unpacked`，再启动 `rg.exe`。
+- 固定 electron-builder 25.1.8：26.x 的新依赖收集器在 npm 6 环境下会因 `@vscode/ripgrep` 未安装的非本平台可选依赖而失败。
+- 项目 `.npmrc` 增加 `electron-mirror` 与 `electron_builder_binaries_mirror`，避免本机全局旧镜像覆盖。
 
 ## 范围约束
 

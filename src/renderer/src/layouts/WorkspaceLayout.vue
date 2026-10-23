@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, type Component } from 'vue'
 import { ChatDotRound, FolderOpened, Moon, Setting, Sunny } from '@element-plus/icons-vue'
+import logoUrl from '@renderer/assets/logo.svg'
 import { desktopApi } from '@renderer/services/desktop-api'
 import { useThemeStore } from '@renderer/stores/theme'
 
@@ -33,7 +34,7 @@ onMounted(async () => {
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">DP</div>
+        <img class="brand-mark" :src="logoUrl" alt="DevPilot logo" />
         <div class="brand-text">
           <strong>DevPilot</strong>
           <span>企业研发助手</span>
@@ -100,17 +101,10 @@ onMounted(async () => {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex: 0 0 30px;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #4f8cff, #2f6fe0);
-  box-shadow: 0 4px 14px rgba(79, 140, 255, 0.28);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
 }
 
 .brand-text {

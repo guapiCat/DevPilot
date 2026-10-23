@@ -2,8 +2,8 @@
 
 面向研发工作的 Windows 桌面智能助手。DevPilot 的目标是让开发者在本地代码仓库中通过 AI 理解代码、定位问题、提出修改，并在 Diff 审核确认后把修改应用到工作区。
 
-> 当前状态：**阶段 1–6 已完成：仓库浏览与编辑、Git 只读集成、SQLite 持久化、多模型接入与切换、只读代码理解工具、AI 修改提案与 Diff 审核**。
-> Windows 打包尚未实现，计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
+> 当前状态：**阶段 1–6 已完成：仓库浏览与编辑、Git 只读集成、SQLite 持久化、多模型接入与切换、只读代码理解工具、AI 修改提案与 Diff 审核**。Windows NSIS 安装包已可构建。
+> 交付计划与剩余验收项见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
 > 架构与编码约束以 [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) 为准，数据库表结构见 [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)。
 
 ## 已实现
@@ -92,11 +92,33 @@ npm run dev
 | ---------------------- | ------------------------------------ |
 | `npm run dev`          | 启动 Electron 开发模式（带 HMR）     |
 | `npm run build`        | 类型检查并构建 Main/Preload/Renderer |
+| `npm run build:win`    | 构建 Windows NSIS 安装包             |
+| `npm run pack:win`     | 构建免安装目录（便于本地验证）       |
 | `npm test`             | 运行 Vitest 单元测试                 |
 | `npm run typecheck`    | Node 与 Web 两套类型检查             |
 | `npm run lint`         | ESLint 检查                          |
 | `npm run format:check` | Prettier 格式检查                    |
 | `npm start`            | 预览已构建产物                       |
+
+## 打包
+
+Windows 安装包使用 electron-builder（NSIS 辅助安装：用户可选择安装目录，并创建桌面与开始菜单快捷方式）。
+
+```bash
+npm run build:win # 产物：dist/DevPilot-<version>-setup.exe
+npm run pack:win  # 产物：dist/win-unpacked/DevPilot.exe（免安装，便于验证）
+```
+
+- Main / Preload / Renderer 先由 electron-vite 输出到 `out/`，再与生产依赖一起打入 `app.asar`。
+- 打包前执行 `clean:package-db`，从 `out/` 与 `resources/`（即进入安装包的内容）中删除 `*.db`、`*.db-wal`、`*.db-shm`、`*.sqlite`、`*.sqlite3` 等文件；只影响打包内容，不会触碰 `%APPDATA%\DevPilot` 下的运行时数据库。
+- `better-sqlite3` 的 N-API 预编译二进制与 `@vscode/ripgrep` 的 `rg.exe` 通过 `asarUnpack` 解包；打包后 `rg` 从 `app.asar.unpacked` 启动。`npmRebuild: false`，无需本机 MSVC 工具链。
+- 安装包未配置代码签名，首次运行可能触发 SmartScreen 提示。
+- 首次构建会下载 Electron 与 electron-builder 辅助工具，项目 `.npmrc` 已配置 npmmirror 镜像。
+
+若 Windows 未开启开发者模式，解压 `winCodeSign` 时可能报 `Cannot create symbolic link`（压缩包内含 macOS 符号链接）。可二选一：
+
+1. 在“设置 → 开发者选项”中开启“开发人员模式”后重试；
+2. 用 7-Zip 将 `winCodeSign-2.6.0.7z` 解压到 `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0`（可排除 `darwin/` 与 `linux/`），electron-builder 会直接使用该缓存。
 
 ## 配置模型
 
@@ -155,12 +177,11 @@ docs/            # 技术设计、开发计划、安全说明、架构决策、�
 
 ## 已知限制
 
-- `search_code` 默认使用内置 ripgrep；安装包中的 asar 解包配置尚未验证（阶段 7），开发环境直接从 `node_modules/@vscode/ripgrep` 加载。
 - AI 只能提议修改或新建文件，不能删除文件；不支持批量应用、会话级撤销或自动格式化。
 - 多文件提案逐项应用，不是原子事务：部分失败时已成功的文件保持已应用状态，失败项标记为 `stale` 或 `failed`。
 - Git 变更视图仍为纯文本统一 Diff；Monaco Diff Editor 目前用于 AI 修改建议审核。
 - Git 集成目前只读；暂存、提交与分支切换尚未接入。
-- 尚未生成 Windows 安装包，better-sqlite3 在安装包内的加载验证未开始（阶段 7）。
+- 安装包未配置代码签名，分发前如需避免 SmartScreen 提示，应补充签名证书配置。
 - 应用图标暂用脚手架占位图。
 - 模型提供商仅覆盖 DeepSeek 与 OpenAI 兼容协议（Anthropic / Gemini 原生协议未接入）；模型是全局当前配置，暂不支持会话级模型或在消息上记录所用模型。
 - 模型预设中的默认模型名仅作参考，可能随服务商调整而过时，可在档案中手动修改。

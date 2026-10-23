@@ -1,0 +1,32 @@
+appId: com.devpilot.app
+productName: DevPilot
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - resources/**/*
+  - package.json
+asarUnpack:
+  - resources/**
+  - '**/better-sqlite3/prebuilds/**'
+  - '**/@vscode/ripgrep-win32-x64/bin/**'
+# better-sqlite3 使用 N-API 预编译二进制，无需 electron-rebuild。
+npmRebuild: false
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  artifactName: ${productName}-${version}-setup.${ext}

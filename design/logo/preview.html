@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DevPilot logo preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #eef1f6; color: #1f2733; }
+      .page { display: grid; grid-template-columns: 1fr 1fr; }
+      .panel { padding: 36px 40px; min-height: 640px; }
+      .panel.dark { background: #15171c; color: #e6e8eb; }
+      .panel h2 { margin: 0 0 24px; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; opacity: .65; font-weight: 600; }
+      .hero { display: flex; align-items: center; gap: 28px; margin-bottom: 34px; }
+      .hero img { width: 220px; height: 220px; filter: drop-shadow(0 18px 34px rgba(0,0,0,.35)); }
+      .hero .meta strong { display: block; font-size: 34px; letter-spacing: .01em; }
+      .hero .meta span { display: block; margin-top: 6px; font-size: 15px; opacity: .6; }
+      .sizes { display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+      .size { text-align: center; }
+      .size img { display: block; margin: 0 auto 10px; }
+      .size span { font-family: Consolas, monospace; font-size: 12px; opacity: .55; }
+      .divider { height: 1px; background: currentColor; opacity: .1; margin: 30px 0; }
+      .sidebar-sim { display: flex; align-items: center; gap: 11px; height: 64px; padding: 0 18px; border-radius: 10px; width: 290px; border: 1px solid; }
+      .sidebar-sim.dark-sim { background: #191c22; border-color: #2c313b; }
+      .sidebar-sim.light-sim { background: #f7f9fc; border-color: #dde3ec; }
+      .sidebar-sim img { width: 30px; height: 30px; border-radius: 8px; }
+      .sidebar-sim .txt { line-height: 1.25; }
+      .sidebar-sim .txt strong { display: block; font-size: 14px; }
+      .sidebar-sim .txt span { display: block; font-size: 11px; opacity: .55; }
+      .light-sim .txt span { color: #66707f; }
+      .dark-sim .txt span { color: #8a93a2; }
+      .note { margin-top: 26px; font-size: 12px; line-height: 1.7; opacity: .55; max-width: 360px; }
+      .lockup { display: block; width: 100%; max-width: 620px; height: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="panel dark">
+        <h2>Dark / 深色</h2>
+        <div class="hero">
+          <img src="./devpilot-logo.svg" alt="DevPilot" />
+          <div class="meta">
+            <strong>DevPilot</strong>
+            <span>企业研发助手 · DP 动漫字标</span>
+          </div>
+        </div>
+        <div class="sizes">
+          <div class="size"><img src="./devpilot-logo.svg" width="128" height="128" alt="" /><span>128</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="64" height="64" alt="" /><span>64</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="48" height="48" alt="" /><span>48</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="32" height="32" alt="" /><span>32</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="24" height="24" alt="" /><span>24</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="16" height="16" alt="" /><span>16</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="sidebar-sim dark-sim">
+          <img src="./devpilot-logo.svg" alt="" />
+          <div class="txt"><strong>DevPilot</strong><span>企业研发助手</span></div>
+        </div>
+        <p class="note">侧边栏 30px 模拟。小尺寸下依靠 DP 字形、描边与高对比青色保留识别度。</p>
+      </section>
+      <section class="panel light">
+        <h2>Light / 浅色</h2>
+        <div class="hero">
+          <img src="./devpilot-logo.svg" alt="DevPilot" />
+          <div class="meta">
+            <strong>DevPilot</strong>
+            <span>企业研发助手 · DP 动漫字标</span>
+          </div>
+        </div>
+        <div class="sizes">
+          <div class="size"><img src="./devpilot-logo.svg" width="128" height="128" alt="" /><span>128</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="64" height="64" alt="" /><span>64</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="48" height="48" alt="" /><span>48</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="32" height="32" alt="" /><span>32</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="24" height="24" alt="" /><span>24</span></div>
+          <div class="size"><img src="./devpilot-logo.svg" width="16" height="16" alt="" /><span>16</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="sidebar-sim light-sim">
+          <img src="./devpilot-logo.svg" alt="" />
+          <div class="txt"><strong>DevPilot</strong><span>企业研发助手</span></div>
+        </div>
+        <p class="note">浅色主题下深色底板依然成立，不需要额外反色版本。</p>
+      </section>
+    </div>
+    <div class="page">
+      <section class="panel dark">
+        <h2>Lockup / 横版组合 · 深色</h2>
+        <img class="lockup" src="./devpilot-lockup-dark.svg" alt="DevPilot lockup dark" />
+      </section>
+      <section class="panel light">
+        <h2>Lockup / 横版组合 · 浅色</h2>
+        <img class="lockup" src="./devpilot-lockup-light.svg" alt="DevPilot lockup light" />
+      </section>
+    </div>
+  </body>
+</html>
