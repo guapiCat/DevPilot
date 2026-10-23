@@ -252,15 +252,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
 
           <ul class="security-list">
             <li>
-              当前版本的对话内容会发送到所配置的云端模型；阶段 5
-              起才会额外发送你授权仓库中的文件片段。
+              AI 对文件的修改只能生成提案，必须以 Diff 形式审核，并由你确认后才会写入磁盘
             </li>
-            <li>
-              AI 对文件的修改只能生成提案，必须以 Diff 形式审核，并由你确认后才会写入磁盘（阶段
-              6）。
-            </li>
-            <li>Renderer 不具备 Node.js、文件系统或数据库访问能力，只能调用受限的 Preload API。</li>
-            <li>默认不执行任意终端命令，也不自动提交、推送或清理 Git 工作区。</li>
             <li>系统会尽量过滤 .env、私钥和证书等敏感文件，但无法保证识别所有秘密。</li>
           </ul>
         </section>
