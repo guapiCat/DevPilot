@@ -40,6 +40,7 @@
 - 提案持久化：`edit_sessions` / `file_edits` 保存原始与建议内容，重启或切换会话后仍可继续审核；提案只保存在本地 SQLite，不会额外上传。
 - 浅色 / 深色双主题：侧边栏底部一键切换，设置页“外观”可选择；偏好保存在本地（localStorage），启动时预加载避免闪烁，Monaco、Markdown 代码高亮与 Diff 配色同步切换。
 - 全局导航与三个页面：研发对话、研发工作区（IDE 三栏布局）、设置。
+- 摸鱼彩蛋：侧边栏底部常驻 DeepSeek 娘全身立绘，可拖动到窗口内任意位置（游戏结束后回到拖动后的位置），双击进入打地鼠小游戏；角色会在窗口内自由跳动，点中 3 次后全屏礼花并自动结束（Esc 可随时退出）。纯前端实现，不发送数据，也不写入本地存储。
 - Pinia Store：`repository`、`chat`、`workspace`，承载当前 UI 状态。
 - 设置页展示当前模型摘要与档案列表、应用版本、Electron/Chromium/Node 版本与数据目录；`.env` 仅作为现有配置的兜底。
 - ESLint、Prettier、TypeScript 严格模式、Vitest 单元测试。

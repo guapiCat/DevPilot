@@ -2,6 +2,7 @@
 import { onMounted, ref, type Component } from 'vue'
 import { ChatDotRound, FolderOpened, Moon, Setting, Sunny } from '@element-plus/icons-vue'
 import logoUrl from '@renderer/assets/logo.svg'
+import FishWhackGame from '@renderer/components/FishWhackGame.vue'
 import { desktopApi } from '@renderer/services/desktop-api'
 import { useThemeStore } from '@renderer/stores/theme'
 
@@ -72,6 +73,8 @@ onMounted(async () => {
     <main class="content">
       <router-view />
     </main>
+
+    <FishWhackGame />
   </div>
 </template>
 
