@@ -170,6 +170,8 @@ async function executeToolCall(
   }
 }
 
+const BUDGET_REACHED_REASON = '本次请求工具输出总量已达上限'
+
 function blockedOutcome(reason: string): ToolOutcome {
   return { status: 'blocked', summary: reason, content: `[工具未执行] ${reason}` }
 }
@@ -199,6 +201,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   let round = 0
   let executedCalls = 0
   let totalOutputChars = 0
+  let budgetExhausted = false
   let inputTokens = 0
   let outputTokens = 0
   let usage: { inputTokens?: number; outputTokens?: number } | null = null
@@ -270,6 +273,8 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         blockedReason = `单轮工具调用超过上限（${limits.maxCallsPerRound} 次）`
       } else if (executedCalls >= limits.maxToolCalls) {
         blockedReason = '本次请求工具调用次数已达上限'
+      } else if (totalOutputChars >= limits.maxTotalToolOutputChars) {
+        blockedReason = BUDGET_REACHED_REASON
       } else {
         const key = `${call.name}:${stableStringify(call.arguments)}`
         if (seenCalls.has(key)) {
@@ -301,14 +306,10 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         )
       }
 
-      const remaining = limits.maxTotalToolOutputChars - totalOutputChars
-      if (remaining <= 0) {
-        outcome = blockedOutcome('本次请求工具输出总量已达上限')
-      }
-
-      const allowed = Math.min(limits.maxToolOutputChars, remaining)
-      const cappedContent =
-        remaining <= 0 ? outcome.content : capText(outcome.content, Math.max(0, allowed)).text
+      const remaining = Math.max(0, limits.maxTotalToolOutputChars - totalOutputChars)
+      const cappedContent = blockedReason
+        ? outcome.content
+        : capText(outcome.content, Math.min(limits.maxToolOutputChars, remaining)).text
       totalOutputChars += cappedContent.length
 
       const durationMs = Date.now() - startedAt
@@ -334,18 +335,24 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         stopped = true
         break
       }
+
+      if (blockedReason === BUDGET_REACHED_REASON) {
+        budgetExhausted = true
+        break
+      }
     }
 
     if (stopped) break
 
-    if (round >= limits.maxRounds || executedCalls >= limits.maxToolCalls) {
-      // 达到工具轮数/调用上限后，用一轮不传工具的收尾调用生成最终回答。
+    if (budgetExhausted || round >= limits.maxRounds || executedCalls >= limits.maxToolCalls) {
+      // 达到工具轮数/次数/输出预算上限后，用一轮不传工具的收尾调用生成最终回答。
       roundLimitReached = true
       toolsEnabled = false
       messages.push({
         role: 'system',
-        content:
-          '工具调用已结束（达到轮数或次数上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答。'
+        content: budgetExhausted
+          ? '工具调用已结束（本次请求的工具输出已达预算上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答；没有读到的内容要明确说明，不要编造。'
+          : '工具调用已结束（达到轮数或次数上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答。'
       })
     }
   }

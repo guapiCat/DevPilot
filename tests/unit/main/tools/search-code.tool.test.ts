@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -52,6 +52,9 @@ describe('buildSearchArgs', () => {
     expect(args).toContain('--max-count')
     expect(args).toContain('!**/node_modules/**')
     expect(args).toContain('!**/.git/**')
+    expect(args).toContain('!**/package-lock.json')
+    expect(args).toContain('!**/*.min.js')
+    expect(args).toContain('!**/coverage/**')
   })
 
   it('默认智能大小写，可切换为忽略或区分大小写', () => {
@@ -188,6 +191,30 @@ describe.skipIf(!rgAvailable)('search_code 工具（真实 ripgrep）', () => {
       const result = await tool.execute({ query: 'TODO', path }, context)
       expect(result.content).toContain('## app.ts')
     }
+  })
+
+  it('忽略锁文件、压缩产物与生成目录', async () => {
+    await writeFile(join(root, 'package-lock.json'), '{\n  "name": "TODO"\n}\n')
+    await writeFile(join(root, 'bundle.min.js'), 'var a=1;// TODO\n')
+    await mkdir(join(root, 'coverage'), { recursive: true })
+    await writeFile(join(root, 'coverage', 'index.html'), '<p>TODO</p>\n')
+
+    const result = await tool.execute({ query: 'TODO' }, context)
+
+    expect(result.content).toContain('## app.ts')
+    expect(result.content).not.toContain('package-lock.json')
+    expect(result.content).not.toContain('bundle.min.js')
+    expect(result.content).not.toContain('coverage/index.html')
+  })
+
+  it('原始输出超限时返回截断结果而不是报错', async () => {
+    const limited = createSearchCodeTool({ getRealRoot: () => root }, { maxRawBytes: 1 })
+
+    const result = await limited.execute({ query: 'TODO' }, context)
+
+    expect(result.truncated).toBe(true)
+    expect(result.content).toContain('结果已截断')
+    expect(result.summary).toContain('已截断')
   })
 
   it('无匹配时正常返回', async () => {

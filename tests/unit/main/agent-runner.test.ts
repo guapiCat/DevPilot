@@ -410,6 +410,31 @@ describe('runAgent', () => {
     expect(result.toolCalls[1].summary).toContain('输出总量已达上限')
   })
 
+  it('输出预算耗尽后立即停止本轮，后续调用不再执行', async () => {
+    const tools = createTools({ longOutput: true })
+    const { adapter } = scriptAdapter([
+      {
+        toolCalls: [
+          { id: 'b1', name: 'echo', arguments: { value: '1' } },
+          { id: 'b2', name: 'echo', arguments: { value: '2' } },
+          { id: 'b3', name: 'echo', arguments: { value: '3' } }
+        ]
+      },
+      { text: '完成' }
+    ])
+
+    const result = await run(adapter, tools.registry, createCallbacks(), {
+      limits: { maxToolOutputChars: 100, maxTotalToolOutputChars: 100 }
+    })
+
+    expect(tools.echo).toHaveBeenCalledTimes(1)
+    expect(result.toolCalls).toHaveLength(2)
+    expect(result.toolCalls[1].status).toBe('blocked')
+    expect(result.toolCalls[1].summary).toContain('输出总量已达上限')
+    expect(result.roundLimitReached).toBe(true)
+    expect(result.answerText).toBe('完成')
+  })
+
   it('聚合多轮 usage', async () => {
     const tools = createTools()
     const { adapter } = scriptAdapter([

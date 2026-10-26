@@ -56,6 +56,37 @@ function readTextField(value: unknown): string | undefined {
   return typeof value.text === 'string' ? value.text : undefined
 }
 
+// 锁文件、压缩产物与生成目录在真实仓库中容易产生上万条匹配，
+// 会把 ripgrep 的原始 JSON 输出迅速推到上限，默认排除。
+const IGNORED_GLOBS: readonly string[] = [
+  '!**/.git/**',
+  '!**/node_modules/**',
+  '!**/dist/**',
+  '!**/out/**',
+  '!**/build/**',
+  '!**/coverage/**',
+  '!**/vendor/**',
+  '!**/target/**',
+  '!**/Pods/**',
+  '!**/__pycache__/**',
+  '!**/venv/**',
+  '!**/package-lock.json',
+  '!**/npm-shrinkwrap.json',
+  '!**/pnpm-lock.yaml',
+  '!**/yarn.lock',
+  '!**/bun.lockb',
+  '!**/bun.lock',
+  '!**/Cargo.lock',
+  '!**/poetry.lock',
+  '!**/Pipfile.lock',
+  '!**/composer.lock',
+  '!**/Gemfile.lock',
+  '!**/go.sum',
+  '!**/*.min.js',
+  '!**/*.min.css',
+  '!**/*.map'
+]
+
 export function buildSearchArgs(
   query: string,
   scope: string,
@@ -78,16 +109,7 @@ export function buildSearchArgs(
     ...(mode === 'literal' ? ['-F'] : []),
     '-e',
     query,
-    '--glob',
-    '!**/.git/**',
-    '--glob',
-    '!**/node_modules/**',
-    '--glob',
-    '!**/dist/**',
-    '--glob',
-    '!**/out/**',
-    '--glob',
-    '!**/build/**',
+    ...IGNORED_GLOBS.flatMap((glob) => ['--glob', glob]),
     '--',
     scope
   ]
@@ -149,8 +171,9 @@ export function parseRgJson(stdout: string): ParsedSearchResult {
 function runSearch(
   cwd: string,
   args: string[],
-  signal: AbortSignal
-): Promise<{ stdout: string; exitCode: number }> {
+  signal: AbortSignal,
+  maxRawBytes: number
+): Promise<{ stdout: string; exitCode: number; truncated: boolean }> {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveRgCommand(), args, { cwd, shell: false, windowsHide: true })
     const stdoutChunks: Buffer[] = []
@@ -186,12 +209,21 @@ function runSearch(
     }
 
     child.stdout.on('data', (chunk: Buffer) => {
-      stdoutSize += chunk.length
-      if (stdoutSize > MAX_SEARCH_RAW_BYTES) {
+      if (settled) return
+      // 原始输出超限时保留已收到的部分，交给解析层裁剪成截断结果；
+      // 末尾不完整的 JSON 行由 parseRgJson 跳过，不再让整次搜索失败。
+      if (stdoutSize + chunk.length > maxRawBytes) {
         child.kill()
-        settle(() => reject(new ToolExecutionError('SEARCH_FAILED', '搜索结果超过上限，已中止')))
+        settle(() =>
+          resolve({
+            stdout: Buffer.concat(stdoutChunks).toString('utf8'),
+            exitCode: 0,
+            truncated: true
+          })
+        )
         return
       }
+      stdoutSize += chunk.length
       stdoutChunks.push(chunk)
     })
     // 必须消费 stderr，避免子进程因管道阻塞。
@@ -222,7 +254,8 @@ function runSearch(
       settle(() =>
         resolve({
           stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-          exitCode: code ?? -1
+          exitCode: code ?? -1,
+          truncated: false
         })
       )
     })
@@ -230,8 +263,11 @@ function runSearch(
 }
 
 export function createSearchCodeTool(
-  repositories: RootProvider = repositoryService
+  repositories: RootProvider = repositoryService,
+  options: { maxRawBytes?: number } = {}
 ): ToolDefinition<typeof schema> {
+  const maxRawBytes = options.maxRawBytes ?? MAX_SEARCH_RAW_BYTES
+
   return {
     name: 'search_code',
     description:
@@ -272,12 +308,13 @@ export function createSearchCodeTool(
       const mode = args.mode ?? 'literal'
       const caseMode = args.case ?? 'smart'
 
-      let result: { stdout: string; exitCode: number }
+      let result: { stdout: string; exitCode: number; truncated: boolean }
       try {
         result = await runSearch(
           root,
           buildSearchArgs(args.query, scope, mode, caseMode),
-          context.signal
+          context.signal,
+          maxRawBytes
         )
       } catch (error) {
         throw toToolError(error)
@@ -296,6 +333,7 @@ export function createSearchCodeTool(
       }
 
       const parsed = parseRgJson(result.stdout)
+      const truncated = parsed.truncated || result.truncated
       const modeLabel = mode === 'regex' ? '正则' : '字面量'
       const caseLabel =
         caseMode === 'insensitive'
@@ -306,7 +344,7 @@ export function createSearchCodeTool(
       const header = [
         `# 搜索: "${args.query}"（${modeLabel}，${caseLabel}）`,
         `匹配 ${parsed.matches.length} 条，涉及 ${parsed.fileCount} 个文件${
-          parsed.truncated ? '（结果已截断）' : ''
+          truncated ? '（结果已截断，仅包含部分匹配；请用 path 缩小范围或使用更精确的查询）' : ''
         }`
       ].join('\n')
       const grouped = new Map<string, SearchMatch[]>()
@@ -322,13 +360,17 @@ export function createSearchCodeTool(
                 [`## ${path}`, ...matches.map((match) => `${match.line}: ${match.text}`)].join('\n')
               )
               .join('\n\n')
-          : '未找到匹配内容。'
+          : truncated
+            ? '搜索输出过大，未能解析出完整匹配结果。请限定 path 或使用更精确的查询。'
+            : '未找到匹配内容。'
       const capped = capText(`${header}\n${body}`, MAX_TOOL_OUTPUT_CHARS)
 
       return {
         content: capped.text,
-        summary: `${parsed.matches.length} 条匹配 / ${parsed.fileCount} 个文件`,
-        truncated: capped.truncated || parsed.truncated
+        summary: `${parsed.matches.length} 条匹配 / ${parsed.fileCount} 个文件${
+          truncated ? '（已截断）' : ''
+        }`,
+        truncated: capped.truncated || truncated
       }
     }
   }

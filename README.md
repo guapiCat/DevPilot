@@ -70,7 +70,7 @@
 - npm（当前验证版本：6.14.5）
 - Git status/diff 依赖系统 `git` 命令（需在 PATH 中）；未安装时面板会提示 `GIT_NOT_AVAILABLE`。
 - SQLite 引擎随 `better-sqlite3` 打包，无需单独安装数据库；本机已验证该模块的 N-API 预编译二进制可在 Electron 44（Node 24 / ABI 149）与 Node 22 下直接加载。
-- `search_code` 使用随 `@vscode/ripgrep` 安装的内置 `rg`，无需系统安装 ripgrep；如需指定其他版本，可设置环境变量 `DEV_PILOT_RG_PATH` 指向 `rg` 可执行文件。内置版本缺失时才回退到系统 PATH 中的 `rg`；全部不可用时该工具返回 `RG_NOT_AVAILABLE`，其他工具与对话不受影响。
+- `search_code` 使用随 `@vscode/ripgrep` 安装的内置 `rg`，无需系统安装 ripgrep；如需指定其他版本，可设置环境变量 `DEV_PILOT_RG_PATH` 指向 `rg` 可执行文件。内置版本缺失时才回退到系统 PATH 中的 `rg`；全部不可用时该工具返回 `RG_NOT_AVAILABLE`，其他工具与对话不受影响。搜索默认排除锁文件、压缩产物与常见生成目录；输出超限时返回已收集的部分结果并标记截断，而不是直接失败。
 
 本项目 `.npmrc` 使用 npmmirror 镜像，适配国内网络。若 Electron 二进制下载失败，可显式指定镜像后重试：
 

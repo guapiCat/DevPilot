@@ -103,9 +103,9 @@
 实现要点：
 
 - 工具全部在主进程执行且只读；参数使用 `z.strictObject` 校验，JSON Schema 由 `z.toJSONSchema()` 生成后绑定给模型。
-- `agent-runner` 限制 5 轮 / 每轮 4 次 / 每次请求 12 次调用、单工具 15 秒、单工具 12k 字符、单请求 32k 字符；重复调用（工具名 + 参数）直接阻止；达到上限后强制一轮不带工具的收尾调用。
+- `agent-runner` 限制 5 轮 / 每轮 4 次 / 每次请求 12 次调用、单工具 15 秒、单工具 20k 字符、单请求 96k 字符；重复调用（工具名 + 参数）直接阻止；输出预算在执行前检查，耗尽立即结束本轮并转入收尾调用，达到轮数/次数上限同样强制一轮不带工具的收尾调用。
 - 敏感文件按路径拒绝（`.env*`（示例文件除外）、私钥、证书、凭据、`.ssh`/`.aws` 等目录），并对高置信密钥模式做内容阻断与搜索片段脱敏。
-- `search_code` 通过 `spawn(resolveRgCommand(), args, { shell: false })` 调用 ripgrep：优先使用 `@vscode/ripgrep` 随包内置的 `rg`，支持 `DEV_PILOT_RG_PATH` 覆盖，内置缺失时回退系统 PATH；10 秒超时、2 MB 输出上限；支持 `case` 智能大小写；结果按文件分组、按文件数/条数与片段长度裁剪。
+- `search_code` 通过 `spawn(resolveRgCommand(), args, { shell: false })` 调用 ripgrep：优先使用 `@vscode/ripgrep` 随包内置的 `rg`，支持 `DEV_PILOT_RG_PATH` 覆盖，内置缺失时回退系统 PATH；10 秒超时、2 MB 输出上限（超限时返回已解析的部分结果并标记截断）；默认排除常见锁文件、`*.min.*`、`*.map` 与生成/第三方目录；支持 `case` 智能大小写；结果按文件分组、按文件数/条数与片段长度裁剪。
 - 工具输出以 `<tool_result>` 包裹并声明为不可信数据；系统提示要求“先定位再读取”，禁止编造路径/行号/内容。
 - 新增事件 `tool_started` / `tool_finished`，不改变 `completed` / `cancelled` / `error` 的单一终态语义；只持久化调用摘要，不保存工具输出正文。
 - 工作区右侧 AI 面板改为真实对话，与对话页共享同一 chat store，切换路由不会中断生成。

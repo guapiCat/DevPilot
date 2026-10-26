@@ -143,9 +143,9 @@
 
 - 工具以 `ToolRegistry` 统一注册；参数用 Zod 4 `z.strictObject` 校验，模型侧 JSON Schema 由 `z.toJSONSchema()` 生成并移除 `$schema`。未知工具与非法参数不执行，错误以稳定 `ToolErrorCode` 返回模型。
 - 只实现 5 个只读工具：`list_files`、`read_file`、`search_code`、`get_git_status`、`get_git_diff`。不提供写文件、任意命令、Git 写操作或网络请求工具。
-- `search_code` 通过 `resolveRgCommand()` 解析 ripgrep：优先 `DEV_PILOT_RG_PATH` 覆盖，其次 `@vscode/ripgrep` 随包内置的 `rg`，最后回退系统 PATH；使用参数数组、`shell: false`、`--no-config`、`--` 分隔查询与范围；10 秒超时、2 MB stdout 上限，退出码 1 视为无匹配。全部不可用返回 `RG_NOT_AVAILABLE`，不阻断对话。
+- `search_code` 通过 `resolveRgCommand()` 解析 ripgrep：优先 `DEV_PILOT_RG_PATH` 覆盖，其次 `@vscode/ripgrep` 随包内置的 `rg`，最后回退系统 PATH；使用参数数组、`shell: false`、`--no-config`、`--` 分隔查询与范围；10 秒超时、2 MB stdout 上限（超限时保留已收到的输出并标记截断，不再整次失败），退出码 1 视为无匹配。默认忽略 `.git`、`node_modules`、`dist`、`out`、`build`、`coverage`、`vendor`、`target`、`Pods`、`__pycache__`、`venv` 等目录，以及常见锁文件、`*.min.*` 与 `*.map`。全部不可用返回 `RG_NOT_AVAILABLE`，不阻断对话。
 - 不引入 LangChain Agent 框架，自写 `agent-runner.ts` 管理循环。模型调用仍走 `ModelAdapter`，`ChatService` 只负责事件、终态与持久化，便于单元测试注入 Mock。
-- 循环限制：最多 5 轮、每轮最多 4 次调用、每次请求最多 12 次；单工具 15 秒超时；单工具输出 12k 字符、单请求累计 32k 字符。达到轮数/调用上限后强制一轮不传工具的收尾调用，仍无回答则返回 `TOOL_EXECUTION_FAILED`。
+- 循环限制：最多 5 轮、每轮最多 4 次调用、每次请求最多 12 次；单工具 15 秒超时；单工具输出 20k 字符、单请求累计 96k 字符。达到轮数/调用/输出预算上限后强制一轮不传工具的收尾调用，仍无回答则返回 `TOOL_EXECUTION_FAILED`。输出预算在工具执行前检查，耗尽时立即结束本轮，越界的调用不会执行。
 - 重复调用按 `工具名 + stableStringify(参数)` 判定，直接标记 `blocked`，不执行；工具被中止、超时或失败只生成该次调用的状态记录，不终止整个请求（取消请求除外）。
 - DeepSeek 流式 `tool_call_chunks` 按 `index` 手动累加 id/name/args，流结束后统一 `JSON.parse`，避免半截 JSON 进入业务层；参数非法时置为 `null`，由 Registry 校验拒绝。
 - 敏感文件采用“路径拒绝为主、内容高置信模式为辅”：路径拒绝 `.env*`（`.env.example/.sample/.template` 除外）、SSH 私钥、证书、凭据与 `.ssh`/`.aws`/`.gnupg` 等目录；`read_file`/`get_git_diff` 命中 PEM 私钥头等高置信模式时整份阻断；搜索片段命中时替换为脱敏占位。文档明确该过滤不能保证识别所有秘密。
@@ -154,6 +154,32 @@
 - 事件协议新增非终态 `tool_started` / `tool_finished`，仍走固定 `chat:event` channel；`completed` / `cancelled` / `error` 的单一终态语义不变。工具事件同时由对话页与工作区 AI 面板消费，二者共享同一 Pinia chat store。
 
 **影响**：模型能够基于真实代码回答并引用相对路径与行号，但文件片段会随之发送到云端模型。`search_code` 默认使用随包内置 ripgrep，不依赖系统安装；安装包已将 `@vscode/ripgrep` 的二进制目录加入 asarUnpack，并在运行时映射到 `app.asar.unpacked`（阶段 7 已验证，见 ADR-017）。后续阶段 6 的写操作必须新增独立、需用户确认的工具与审核流程，不能复用本阶段的只读边界绕过 Diff 审核。
+
+### 2026-10-26 调整：工具输出预算与耗尽行为
+
+**问题**：单请求 32k 字符的工具输出上限只占 DeepSeek 上下文（64k token）的三分之一左右，长任务在读完 3～4 个源文件后就会触发「本次请求工具输出总量已达上限」，正常排查被提前截断。原实现还有两个放大问题：预算检查放在工具执行之后，越界的调用已经跑完却把结果替换为「未执行」；预算耗尽后循环仍继续到轮数/次数上限，空跑多次完整的模型请求。
+
+**改动**：
+
+- 单工具输出上限 12k → 20k 字符；单请求累计 32k → 96k 字符（约 25～30k token，仍在 64k 上下文内）。
+- 预算检查前移到执行前：已耗尽时直接标记 `blocked`，不再执行工具。
+- 预算耗尽时立即结束本轮并转入收尾调用，不再空跑剩余轮次；收尾提示区分「轮数/次数上限」与「输出预算上限」，并要求模型对未读取的内容明确说明，不得编造。
+- 若接入上下文更小的自定义 OpenAI 兼容端点，可通过 `ChatService` 的 `agentLimits` 下调预算，或直接调整 `src/shared/constants/app.ts` 中的常量。
+
+**代价**：原本会撞 32k 的长任务，峰值输入 token 约翻倍（增量主要是工具结果）；普通短会话不受影响，因为预算是上限而非预分配。耗尽后立即收尾会省掉 1～3 次空跑的模型请求，多数情况下可抵消增量。
+
+### 2026-10-26 调整（二）：搜索结果超限降级与默认忽略规则
+
+**问题**：关联真实项目时，`search_code` 常以「搜索结果超过上限，已中止」结束，模型一条结果都拿不到。2 MB 上限统计的是 ripgrep 的原始 `--json` 字节，而 `--max-count` 只限制单文件条数，200 条总数上限又要等进程结束后的解析阶段才生效。宽泛查询命中锁文件、压缩产物或生成目录时，原始输出会在解析前就被推到 2 MB。
+
+**改动**：
+
+- 原始输出超限时不再报错：保留已收到的输出、结束 rg 进程并标记 `truncated`，由解析层裁成部分结果返回；末尾不完整的 JSON 行由 `parseRgJson` 跳过。失败从「无结果」降级为「部分结果 + 截断提示」。
+- 结果表头在截断时附带后续建议（限定 `path` 或使用更精确的查询）；若一条完整结果都没解析出来，返回明确的提示文案。
+- 默认忽略规则从 5 个目录扩充为：`coverage`、`vendor`、`target`、`Pods`、`__pycache__`、`venv` 等生成/第三方目录，以及 `package-lock.json`、`pnpm-lock.yaml`、`yarn.lock`、`Cargo.lock`、`go.sum` 等锁文件与 `*.min.js`、`*.min.css`、`*.map`。
+- `createSearchCodeTool` 新增可选 `maxRawBytes` 参数，便于测试和后续按仓库调整。
+
+**影响**：宽泛查询不再一律失败，模型能基于部分结果继续定位；代价是默认排除后无法再搜到锁文件与压缩产物中的内容。200 条 / 40 文件 / 单文件 10 条的解析上限未变。
 
 ## ADR-014：AI 修改采用“精确替换提案 + 用户逐文件确认”
 
