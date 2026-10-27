@@ -7,22 +7,17 @@ import {
   MAX_TOOL_RESULT_SUMMARY_CHARS,
   MAX_TOOL_ROUNDS,
   MAX_TOTAL_TOOL_OUTPUT_CHARS,
-  TOOL_EXECUTION_TIMEOUT_MS
+  TOOL_EXECUTION_TIMEOUT_MS,
 } from '@shared/constants/app'
 import type { ToolCallRecord, ToolCallStatus } from '@shared/types/tool'
-import type {
-  ModelAdapter,
-  ModelMessage,
-  ModelToolCall,
-  ModelToolDefinition
-} from './model-adapter'
+import type { ModelAdapter, ModelMessage, ModelToolCall, ModelToolDefinition } from './model-adapter'
 import { capText, clampText, formatToolError } from './tools/output'
 import {
   ToolExecutionError,
   type EditProposalService,
   type EditProposedEvent,
   type ToolContext,
-  type ToolRegistry
+  type ToolRegistry,
 } from './tools/tool-registry'
 
 export interface AgentLimits {
@@ -42,7 +37,7 @@ export const DEFAULT_AGENT_LIMITS: AgentLimits = {
   toolTimeoutMs: TOOL_EXECUTION_TIMEOUT_MS,
   maxToolOutputChars: MAX_TOOL_OUTPUT_CHARS,
   maxTotalToolOutputChars: MAX_TOTAL_TOOL_OUTPUT_CHARS,
-  maxOutputTokens: MAX_CHAT_OUTPUT_TOKENS
+  maxOutputTokens: MAX_CHAT_OUTPUT_TOKENS,
 }
 
 export interface AgentCallbacks {
@@ -104,9 +99,7 @@ export function stableStringify(value: unknown): string {
 
   const record = value as Record<string, unknown>
   const keys = Object.keys(record).sort()
-  return `{${keys
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-    .join(',')}}`
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`
 }
 
 async function executeToolCall(
@@ -114,7 +107,7 @@ async function executeToolCall(
   registry: ToolRegistry,
   context: Omit<ToolContext, 'signal'>,
   runSignal: AbortSignal,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<ToolOutcome> {
   const timeoutController = new AbortController()
   const combined = AbortSignal.any([runSignal, timeoutController.signal])
@@ -149,20 +142,20 @@ async function executeToolCall(
       return {
         status: 'timeout',
         summary: '执行超时',
-        content: formatToolError(call.name, 'TOOL_FAILED', '工具执行超时')
+        content: formatToolError(call.name, 'TOOL_FAILED', '工具执行超时'),
       }
     }
     if (error instanceof ToolExecutionError) {
       return {
         status: error.code === 'SENSITIVE_FILE' ? 'blocked' : 'error',
         summary: error.message,
-        content: formatToolError(call.name, error.code, error.message)
+        content: formatToolError(call.name, error.code, error.message),
       }
     }
     return {
       status: 'error',
       summary: '工具执行失败',
-      content: formatToolError(call.name, 'TOOL_FAILED', '工具执行失败')
+      content: formatToolError(call.name, 'TOOL_FAILED', '工具执行失败'),
     }
   } finally {
     if (timer) clearTimeout(timer)
@@ -178,15 +171,14 @@ function blockedOutcome(reason: string): ToolOutcome {
 
 export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   const limits: AgentLimits = { ...DEFAULT_AGENT_LIMITS, ...input.limits }
-  const tools: ModelToolDefinition[] =
-    input.registry && input.repositoryId ? input.registry.toModelTools() : []
+  const tools: ModelToolDefinition[] = input.registry && input.repositoryId ? input.registry.toModelTools() : []
 
   const toolContext: Omit<ToolContext, 'signal'> = {
     repositoryId: input.repositoryId ?? '',
     conversationId: input.conversationId ?? undefined,
     runId: input.runId,
     editService: input.editService ?? undefined,
-    onEditProposed: input.callbacks.onEditProposed
+    onEditProposed: input.callbacks.onEditProposed,
   }
 
   const messages: ModelMessage[] = [...input.messages]
@@ -221,7 +213,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
       messages,
       signal: input.signal,
       tools: streamUseTools ? tools : undefined,
-      maxTokens: limits.maxOutputTokens
+      maxTokens: limits.maxOutputTokens,
     })) {
       if (input.signal.aborted) break
 
@@ -237,7 +229,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         roundUsage.outputTokens += event.outputTokens ?? 0
         input.callbacks.onUsage({
           inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens
+          outputTokens: event.outputTokens,
         })
       }
     }
@@ -261,7 +253,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     messages.push({
       role: 'assistant',
       content: stripToolCallMarkup(roundText),
-      toolCalls: roundCalls
+      toolCalls: roundCalls,
     })
     round += 1
 
@@ -286,7 +278,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
 
       const argsSummary = clampText(
         input.registry?.summarize(call.name, call.arguments) ?? '(未知工具)',
-        MAX_TOOL_ARG_SUMMARY_CHARS
+        MAX_TOOL_ARG_SUMMARY_CHARS,
       )
       input.callbacks.onToolStarted({ id: call.id, name: call.name, argsSummary })
 
@@ -302,7 +294,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
           input.registry as ToolRegistry,
           toolContext,
           input.signal,
-          limits.toolTimeoutMs
+          limits.toolTimeoutMs,
         )
       }
 
@@ -319,7 +311,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         argumentsSummary: argsSummary,
         status: outcome.status,
         summary: clampText(outcome.summary, MAX_TOOL_RESULT_SUMMARY_CHARS),
-        durationMs
+        durationMs,
       }
 
       toolCalls.push(record)
@@ -328,7 +320,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         role: 'tool',
         content: `<tool_result>\n${cappedContent}\n</tool_result>`,
         toolCallId: call.id,
-        toolName: call.name
+        toolName: call.name,
       })
 
       if (outcome.status === 'cancelled') {
@@ -352,7 +344,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         role: 'system',
         content: budgetExhausted
           ? '工具调用已结束（本次请求的工具输出已达预算上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答；没有读到的内容要明确说明，不要编造。'
-          : '工具调用已结束（达到轮数或次数上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答。'
+          : '工具调用已结束（达到轮数或次数上限）。不要再输出任何工具调用或工具调用格式，请直接基于已获得的工具结果给出最终回答。',
       })
     }
   }
@@ -363,6 +355,6 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     toolCalls,
     usage,
     stopped,
-    roundLimitReached
+    roundLimitReached,
   }
 }

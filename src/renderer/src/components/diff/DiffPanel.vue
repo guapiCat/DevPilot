@@ -6,23 +6,13 @@ import type { AppliedFileEdit } from '@shared/types/edit'
 import type { GitFileStatus } from '@shared/types/git'
 import EmptyState from '@renderer/components/common/EmptyState.vue'
 import ProposalReview from '@renderer/components/diff/ProposalReview.vue'
+import UnifiedDiffView from '@renderer/components/diff/UnifiedDiffView.vue'
 import { useChatStore } from '@renderer/stores/chat'
 import { useEditStore } from '@renderer/stores/edits'
 import { useRepositoryStore } from '@renderer/stores/repository'
 import type { DiffPanelMode } from '@renderer/stores/workspace'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
-
-const MAX_RENDERED_DIFF_LINES = 4000
-
-const STATUS_META: Record<GitFileStatus, { label: string; className: string }> = {
-  modified: { label: 'M', className: 'modified' },
-  added: { label: 'A', className: 'added' },
-  deleted: { label: 'D', className: 'deleted' },
-  renamed: { label: 'R', className: 'renamed' },
-  untracked: { label: 'U', className: 'untracked' },
-  conflicted: { label: '!', className: 'conflicted' },
-  unknown: { label: '?', className: 'unknown' }
-}
+import { GIT_STATUS_META } from '@renderer/utils/git'
 
 const emit = defineEmits<{
   open: [relativePath: string]
@@ -45,21 +35,20 @@ const {
   gitDiff,
   gitDiffLoading,
   gitDiffError,
-  gitChangeCount
+  gitChangeCount,
 } = storeToRefs(repository)
 
 const visibleTotalCount = computed(() =>
   activeRepository.value
     ? sessions.value.reduce(
-        (sum, session) =>
-          session.repositoryId === activeRepository.value?.id ? sum + session.files.length : sum,
-        0
+        (sum, session) => (session.repositoryId === activeRepository.value?.id ? sum + session.files.length : sum),
+        0,
       )
-    : totalCount.value
+    : totalCount.value,
 )
 
 const mode = computed<DiffPanelMode>(
-  () => workspace.diffPanelMode ?? (visibleTotalCount.value > 0 ? 'proposals' : 'git')
+  () => workspace.diffPanelMode ?? (visibleTotalCount.value > 0 ? 'proposals' : 'git'),
 )
 
 watch(visibleTotalCount, (count, previous) => {
@@ -74,7 +63,7 @@ watch(
   (conversationId) => {
     void edits.loadPending(conversationId)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(diffPanelVisible, (visible) => {
@@ -88,36 +77,10 @@ const branchLabel = computed(() => {
   return gitStatus.value?.branch ?? 'HEAD'
 })
 
-const selectedChange = computed(() =>
-  changes.value.find((change) => change.relativePath === selectedGitPath.value)
-)
-
-const diffLines = computed(() => {
-  const text = gitDiff.value?.diff ?? ''
-  if (!text) return []
-
-  return text
-    .split('\n')
-    .slice(0, MAX_RENDERED_DIFF_LINES)
-    .map((line) => ({ text: line, type: classifyDiffLine(line) }))
-})
-
-const diffOverflow = computed(() => {
-  if (!gitDiff.value) return false
-  if (gitDiff.value.truncated) return true
-  return gitDiff.value.diff.split('\n').length > MAX_RENDERED_DIFF_LINES
-})
-
-function classifyDiffLine(line: string): string {
-  if (line.startsWith('diff ') || line.startsWith('+++') || line.startsWith('---')) return 'meta'
-  if (line.startsWith('@@')) return 'hunk'
-  if (line.startsWith('+')) return 'add'
-  if (line.startsWith('-')) return 'del'
-  return 'context'
-}
+const selectedChange = computed(() => changes.value.find((change) => change.relativePath === selectedGitPath.value))
 
 function statusMeta(status: GitFileStatus): { label: string; className: string } {
-  return STATUS_META[status]
+  return GIT_STATUS_META[status]
 }
 
 function changeTitle(relativePath: string): string {
@@ -163,8 +126,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             type="button"
             class="panel-tab"
             :class="{ active: mode === 'proposals' }"
-            @click="workspace.diffPanelMode = 'proposals'"
-          >
+            @click="workspace.diffPanelMode = 'proposals'">
             AI 建议
             <span v-if="visibleTotalCount > 0" class="tab-count">{{ visibleTotalCount }}</span>
           </button>
@@ -172,8 +134,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             type="button"
             class="panel-tab"
             :class="{ active: mode === 'git' }"
-            @click="workspace.diffPanelMode = 'git'"
-          >
+            @click="workspace.diffPanelMode = 'git'">
             Git 变更
             <span v-if="gitChangeCount > 0" class="tab-count">{{ gitChangeCount }}</span>
           </button>
@@ -191,8 +152,7 @@ function handleApplied(payload: AppliedFileEdit): void {
           :loading="mode === 'git' ? gitStatusLoading : loading"
           :disabled="mode === 'git' && !activeRepository?.isGitRepository"
           :title="mode === 'proposals' ? '刷新修改建议' : '刷新 Git 状态'"
-          @click="refresh"
-        >
+          @click="refresh">
           <el-icon><Refresh /></el-icon>
         </el-button>
         <el-button text size="small" aria-label="收起面板" @click="workspace.toggleDiffPanel()">
@@ -201,20 +161,14 @@ function handleApplied(payload: AppliedFileEdit): void {
       </div>
     </header>
 
-    <ProposalReview
-      v-if="mode === 'proposals'"
-      class="proposal-host"
-      @applied="handleApplied"
-      @open="openFile"
-    />
+    <ProposalReview v-if="mode === 'proposals'" class="proposal-host" @applied="handleApplied" @open="openFile" />
 
     <div v-else-if="!activeRepository" class="panel-body">
       <EmptyState
         compact
         :icon="Files"
         title="尚未选择仓库"
-        description="选择本地仓库后，这里会展示工作区变更与文件 Diff。"
-      />
+        description="选择本地仓库后，这里会展示工作区变更与文件 Diff。" />
     </div>
 
     <div v-else-if="!activeRepository.isGitRepository" class="panel-body">
@@ -222,8 +176,7 @@ function handleApplied(payload: AppliedFileEdit): void {
         compact
         :icon="Files"
         title="当前文件夹不是 Git 仓库"
-        description="DevPilot 仍可浏览与编辑文件；初始化 Git 仓库后可查看状态与 Diff。"
-      />
+        description="DevPilot 仍可浏览与编辑文件；初始化 Git 仓库后可查看状态与 Diff。" />
     </div>
 
     <div v-else-if="gitStatusError" class="panel-body status-error">
@@ -239,9 +192,7 @@ function handleApplied(payload: AppliedFileEdit): void {
       <aside class="change-list">
         <div class="change-list-head">
           <span>{{ gitChangeCount }} 个变更</span>
-          <el-tag v-if="gitStatus?.truncated" size="small" type="warning" effect="plain">
-            已截断
-          </el-tag>
+          <el-tag v-if="gitStatus?.truncated" size="small" type="warning" effect="plain"> 已截断 </el-tag>
         </div>
 
         <div v-if="changes.length === 0" class="change-empty">工作区没有变更</div>
@@ -254,8 +205,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             class="change-item"
             :class="{ active: selectedGitPath === change.relativePath }"
             :title="changeTitle(change.relativePath)"
-            @click="repository.selectGitChange(change.relativePath)"
-          >
+            @click="repository.selectGitChange(change.relativePath)">
             <span class="status-chip" :class="statusMeta(change.status).className">
               {{ statusMeta(change.status).label }}
             </span>
@@ -271,15 +221,12 @@ function handleApplied(payload: AppliedFileEdit): void {
             compact
             :icon="Document"
             title="选择一个变更文件"
-            description="点击左侧文件查看相对 HEAD 的文本 Diff。"
-          />
+            description="点击左侧文件查看相对 HEAD 的文本 Diff。" />
         </template>
 
         <div v-else-if="gitDiffError" class="diff-error">
           <el-alert :title="gitDiffError" type="error" show-icon :closable="false" />
-          <el-button size="small" @click="repository.refreshGitDiff(selectedGitPath)">
-            重试
-          </el-button>
+          <el-button size="small" @click="repository.refreshGitDiff(selectedGitPath)"> 重试 </el-button>
         </div>
 
         <div v-else-if="gitDiffLoading && !gitDiff" class="diff-loading">
@@ -294,21 +241,7 @@ function handleApplied(payload: AppliedFileEdit): void {
             </el-button>
           </div>
 
-          <div v-if="gitDiff.truncated || diffOverflow" class="diff-warning">
-            差异过大，仅显示前 {{ MAX_RENDERED_DIFF_LINES }} 行或前 512 KB。
-          </div>
-
-          <div v-if="diffLines.length === 0" class="diff-empty">该文件没有可展示的文本差异。</div>
-          <div v-else class="diff-content">
-            <div
-              v-for="(line, index) in diffLines"
-              :key="index"
-              class="diff-line"
-              :class="line.type"
-            >
-              {{ line.text || ' ' }}
-            </div>
-          </div>
+          <UnifiedDiffView :diff="gitDiff.diff" :truncated="gitDiff.truncated" />
         </template>
       </section>
     </div>
@@ -558,15 +491,6 @@ function handleApplied(payload: AppliedFileEdit): void {
   white-space: nowrap;
 }
 
-.diff-warning {
-  flex: 0 0 auto;
-  padding: 5px 14px;
-  border-bottom: 1px solid var(--dp-border);
-  background: var(--dp-diff-warning-bg);
-  color: var(--dp-diff-modified-text);
-  font-size: 11px;
-}
-
 .diff-error {
   display: flex;
   flex-direction: column;
@@ -576,47 +500,6 @@ function handleApplied(payload: AppliedFileEdit): void {
 
 .diff-loading {
   padding: 14px;
-}
-
-.diff-empty {
-  padding: 24px 14px;
-  color: var(--dp-text-muted);
-  font-size: 12px;
-}
-
-.diff-content {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 6px 0;
-  font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 11.5px;
-  line-height: 18px;
-}
-
-.diff-line {
-  min-height: 18px;
-  padding: 0 14px;
-  color: var(--dp-text-secondary);
-  white-space: pre;
-}
-
-.diff-line.add {
-  background: var(--dp-diff-line-add-bg);
-  color: var(--dp-diff-line-add-text);
-}
-
-.diff-line.del {
-  background: var(--dp-diff-line-del-bg);
-  color: var(--dp-diff-line-del-text);
-}
-
-.diff-line.hunk {
-  color: var(--dp-diff-hunk-text);
-}
-
-.diff-line.meta {
-  color: var(--dp-text-muted);
 }
 
 @media (max-width: 1280px) {

@@ -5,7 +5,7 @@ export {
   finalizeToolCalls,
   mergeToolCallChunks,
   normalizeContent,
-  type ToolCallAccumulatorState
+  type ToolCallAccumulatorState,
 } from './openai-compatible.adapter'
 
 export interface DeepSeekAdapterOptions {
@@ -18,7 +18,7 @@ export class DeepSeekAdapter extends OpenAiCompatibleAdapter {
   constructor(options: DeepSeekAdapterOptions) {
     super({
       ...options,
-      createModel: (modelOptions: ChatModelOptions) => new ChatDeepSeek(modelOptions)
+      createModel: (modelOptions: ChatModelOptions) => new ChatDeepSeek(modelOptions),
     })
   }
 }

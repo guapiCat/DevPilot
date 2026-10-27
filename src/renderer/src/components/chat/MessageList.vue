@@ -12,7 +12,7 @@ const props = withDefaults(
     generating?: boolean
     retryable?: boolean
   }>(),
-  { generating: false, retryable: false }
+  { generating: false, retryable: false },
 )
 
 const emit = defineEmits<{
@@ -42,7 +42,7 @@ watch(
     length: props.messages.length,
     contentLength: lastMessage.value?.content.length ?? 0,
     toolCallCount: lastMessage.value?.toolCalls?.length ?? 0,
-    generating: props.generating
+    generating: props.generating,
   }),
   (next, previous) => {
     if (next.length > previous.length && lastMessage.value?.role === 'user') {
@@ -51,7 +51,7 @@ watch(
     }
     if (!pinnedToBottom) return
     void nextTick(scrollToBottom)
-  }
+  },
 )
 </script>
 
@@ -62,35 +62,22 @@ watch(
     role="log"
     aria-live="polite"
     :aria-busy="generating ? 'true' : 'false'"
-    @scroll.passive="handleScroll"
-  >
+    @scroll.passive="handleScroll">
     <EmptyState
       v-if="messages.length === 0"
       :icon="ChatLineRound"
       title="开始一次研发对话"
-      description="AI 可只读浏览当前关联仓库中的少量文件与搜索片段，内容会发送到所配置的云端模型；不会修改文件或执行命令。"
-    />
+      description="AI 可只读浏览当前关联仓库中的少量文件与搜索片段，内容会发送到所配置的云端模型；不会修改文件或执行命令。" />
 
     <template v-else>
-      <article
-        v-for="message in messages"
-        :key="message.id"
-        class="message"
-        :class="`role-${message.role}`"
-      >
+      <article v-for="message in messages" :key="message.id" class="message" :class="`role-${message.role}`">
         <header>
           <span>{{ message.role === 'user' ? '你' : 'DevPilot' }}</span>
           <span v-if="message.status === 'cancelled'" class="status-tag">已停止</span>
           <span v-else-if="message.status === 'error'" class="status-tag danger">生成失败</span>
         </header>
-        <ToolCallList
-          v-if="message.role !== 'user' && message.toolCalls?.length"
-          :calls="message.toolCalls"
-        />
-        <MarkdownContent
-          v-if="message.content && message.role !== 'user'"
-          :content="message.content"
-        />
+        <ToolCallList v-if="message.role !== 'user' && message.toolCalls?.length" :calls="message.toolCalls" />
+        <MarkdownContent v-if="message.content && message.role !== 'user'" :content="message.content" />
         <p v-else-if="message.content" class="plain-text">{{ message.content }}</p>
         <p v-else-if="message.status === 'cancelled'" class="placeholder-text">已停止生成</p>
         <p v-else-if="message.toolCalls?.length" class="placeholder-text">正在调用工具…</p>

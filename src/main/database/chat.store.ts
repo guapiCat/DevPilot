@@ -36,7 +36,7 @@ function toConversation(row: ConversationRow): Conversation {
     title: row.title,
     repositoryId: row.repository_id,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }
 }
 
@@ -57,7 +57,7 @@ function toMessage(row: MessageRow): ChatMessage {
     role: row.role as ChatRole,
     content: row.content,
     createdAt: row.created_at,
-    toolCalls: parseToolCalls(row.tool_calls)
+    toolCalls: parseToolCalls(row.tool_calls),
   }
 }
 
@@ -75,7 +75,7 @@ export class ChatStore {
       .prepare<[], ConversationRow>(
         `SELECT id, repository_id, title, created_at, updated_at
          FROM conversations
-         ORDER BY updated_at DESC, rowid DESC`
+         ORDER BY updated_at DESC, rowid DESC`,
       )
       .all()
 
@@ -87,7 +87,7 @@ export class ChatStore {
       .prepare<[string], ConversationRow>(
         `SELECT id, repository_id, title, created_at, updated_at
          FROM conversations
-         WHERE id = ?`
+         WHERE id = ?`,
       )
       .get(id)
 
@@ -98,7 +98,7 @@ export class ChatStore {
     this.db
       .prepare<[string, string | null, string, string, string]>(
         `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?)`,
       )
       .run(record.id, record.repositoryId, record.title, record.createdAt, record.updatedAt)
 
@@ -107,7 +107,7 @@ export class ChatStore {
       title: record.title,
       repositoryId: record.repositoryId,
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
+      updatedAt: record.updatedAt,
     }
   }
 
@@ -121,7 +121,7 @@ export class ChatStore {
         `SELECT id, conversation_id, role, content, created_at, tool_calls
          FROM messages
          WHERE conversation_id = ?
-         ORDER BY created_at, rowid`
+         ORDER BY created_at, rowid`,
       )
       .all(conversationId)
 
@@ -135,7 +135,7 @@ export class ChatStore {
          FROM messages
          WHERE conversation_id = ?
          ORDER BY created_at DESC, rowid DESC
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(conversationId, limit)
 
@@ -147,7 +147,7 @@ export class ChatStore {
       const { count } = this.db
         .prepare<[string], { count: number }>(
           `SELECT COUNT(*) AS count FROM messages
-           WHERE conversation_id = ? AND role = 'user'`
+           WHERE conversation_id = ? AND role = 'user'`,
         )
         .get(conversationId) ?? { count: 0 }
 
@@ -165,7 +165,7 @@ export class ChatStore {
     conversationId: string,
     content: string,
     createdAt: string,
-    toolCalls: ToolCallRecord[] = []
+    toolCalls: ToolCallRecord[] = [],
   ): ChatMessage {
     return this.insertMessage(conversationId, 'assistant', content, createdAt, toolCalls)
   }
@@ -175,21 +175,21 @@ export class ChatStore {
     role: ChatRole,
     content: string,
     createdAt: string,
-    toolCalls: ToolCallRecord[] = []
+    toolCalls: ToolCallRecord[] = [],
   ): ChatMessage {
     const toolCallsJson = toolCalls.length > 0 ? JSON.stringify(toolCalls) : null
     const message: ChatMessage = {
       id: randomUUID(),
       role,
       content,
-      createdAt
+      createdAt,
     }
     if (toolCalls.length > 0) message.toolCalls = toolCalls
 
     this.db
       .prepare<[string, string, string, string, string | null, string]>(
         `INSERT INTO messages (id, conversation_id, role, content, tool_calls, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(message.id, conversationId, role, content, toolCallsJson, createdAt)
 

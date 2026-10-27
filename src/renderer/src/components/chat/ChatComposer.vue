@@ -35,19 +35,12 @@ function submit(): void {
       resize="none"
       :disabled="disabled"
       placeholder="描述你的研发问题，例如：登录流程的令牌刷新逻辑在哪里？"
-      @keydown.enter.exact.prevent="submit"
-    />
+      @keydown.enter.exact.prevent="submit" />
     <div class="footer">
       <div class="footer-left">
         <slot name="toolbar" />
         <span class="hint">
-          {{
-            disabled
-              ? disabledHint
-              : generating
-                ? '正在生成，可先停止或等待'
-                : 'Enter 发送 · Shift + Enter 换行'
-          }}
+          {{ disabled ? disabledHint : generating ? '正在生成，可先停止或等待' : 'Enter 发送 · Shift + Enter 换行' }}
         </span>
       </div>
       <el-button v-if="generating" type="danger" plain @click="emit('cancel')">

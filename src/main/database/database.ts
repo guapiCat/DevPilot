@@ -97,7 +97,7 @@ const MIGRATIONS: readonly Migration[] = [
 
       CREATE INDEX idx_model_profiles_updated_at ON model_profiles(updated_at DESC);
     `)
-  }
+  },
 ]
 
 export const SCHEMA_VERSION = MIGRATIONS.length

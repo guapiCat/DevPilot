@@ -3,7 +3,7 @@ import {
   CHAT_HISTORY_MAX_MESSAGES,
   CHAT_REQUEST_TIMEOUT_MS,
   DEFAULT_CONVERSATION_TITLE,
-  MODEL_CONNECTION_TEST_TIMEOUT_MS
+  MODEL_CONNECTION_TEST_TIMEOUT_MS,
 } from '@shared/constants/app'
 import type {
   AiConnectionTestResult,
@@ -14,7 +14,7 @@ import type {
   RetryChatInput,
   RetryChatResult,
   SendChatInput,
-  SendChatResult
+  SendChatResult,
 } from '@shared/types/chat'
 import type { ErrorCode } from '@shared/types/ipc'
 import { runAgent, type AgentLimits } from '../ai/agent-runner'
@@ -121,7 +121,7 @@ export class ChatService {
       title: DEFAULT_CONVERSATION_TITLE,
       repositoryId,
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
     })
   }
 
@@ -154,11 +154,7 @@ export class ChatService {
 
     let userMessage: ChatMessage
     try {
-      userMessage = store.appendUserMessage(
-        conversation.id,
-        input.content,
-        this.now().toISOString()
-      )
+      userMessage = store.appendUserMessage(conversation.id, input.content, this.now().toISOString())
     } catch {
       throw new ServiceError('DATABASE_ERROR', '消息保存失败，请稍后重试')
     }
@@ -169,7 +165,7 @@ export class ChatService {
     return {
       requestId: input.requestId,
       conversationId: conversation.id,
-      userMessage
+      userMessage,
     }
   }
 
@@ -179,9 +175,7 @@ export class ChatService {
     const config = this.configProvider()
     const conversation = this.requireConversation(input.conversationId)
 
-    const hasUserMessage = store
-      .listMessages(conversation.id)
-      .some((message) => message.role === 'user')
+    const hasUserMessage = store.listMessages(conversation.id).some((message) => message.role === 'user')
     if (!hasUserMessage) {
       throw new ServiceError('VALIDATION_ERROR', '当前会话没有可重试的消息')
     }
@@ -214,23 +208,18 @@ export class ChatService {
     const config = this.configProvider()
     return testAdapterConnection(config, {
       adapterFactory: this.adapterFactory,
-      timeoutMs: this.connectionTimeoutMs
+      timeoutMs: this.connectionTimeoutMs,
     })
   }
 
-  private startRun(
-    requestId: string,
-    conversationId: string,
-    sink: ChatEventSink,
-    config: ResolvedAiConfig
-  ): void {
+  private startRun(requestId: string, conversationId: string, sink: ChatEventSink, config: ResolvedAiConfig): void {
     const run: ChatRun = {
       requestId,
       conversationId,
       controller: new AbortController(),
       abortReason: null,
       sink,
-      silent: false
+      silent: false,
     }
 
     this.activeRun = run
@@ -246,25 +235,16 @@ export class ChatService {
     }, this.timeoutMs)
 
     let usage: { inputTokens?: number; outputTokens?: number } | null = null
-    let terminal: ChatEvent = this.errorEvent(
-      run,
-      'MODEL_REQUEST_FAILED',
-      '模型请求失败，请稍后重试'
-    )
+    let terminal: ChatEvent = this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型请求失败，请稍后重试')
 
     try {
       const store = this.requireStore()
       const conversation = this.requireConversation(run.conversationId)
-      const toolsEnabled = Boolean(
-        this.toolRegistry && conversation.repositoryId && config.toolsEnabled
-      )
-      const messages = buildModelMessages(
-        store.listRecentMessages(conversation.id, CHAT_HISTORY_MAX_MESSAGES),
-        {
-          repositoryName: this.repositoryName(conversation.repositoryId),
-          toolsEnabled
-        }
-      )
+      const toolsEnabled = Boolean(this.toolRegistry && conversation.repositoryId && config.toolsEnabled)
+      const messages = buildModelMessages(store.listRecentMessages(conversation.id, CHAT_HISTORY_MAX_MESSAGES), {
+        repositoryName: this.repositoryName(conversation.repositoryId),
+        toolsEnabled,
+      })
 
       const adapter = this.adapterFactory(config)
       const result = await runAgent({
@@ -283,7 +263,7 @@ export class ChatService {
               type: 'text_delta',
               requestId: run.requestId,
               conversationId: run.conversationId,
-              text: delta
+              text: delta,
             })
           },
           onToolStarted: (call) => {
@@ -293,13 +273,11 @@ export class ChatService {
               conversationId: run.conversationId,
               toolCallId: call.id,
               name: call.name,
-              argsSummary: call.argsSummary
+              argsSummary: call.argsSummary,
             })
           },
           onToolFinished: (record) => {
-            console.info(
-              `[tool] ${record.name} status=${record.status} duration=${record.durationMs}ms`
-            )
+            console.info(`[tool] ${record.name} status=${record.status} duration=${record.durationMs}ms`)
             this.emit(run, {
               type: 'tool_finished',
               requestId: run.requestId,
@@ -308,7 +286,7 @@ export class ChatService {
               name: record.name,
               status: record.status,
               summary: record.summary,
-              durationMs: record.durationMs
+              durationMs: record.durationMs,
             })
           },
           onEditProposed: (proposal) => {
@@ -319,11 +297,11 @@ export class ChatService {
               editSessionId: proposal.editSessionId,
               fileEditId: proposal.fileEditId,
               relativePath: proposal.relativePath,
-              operation: proposal.operation
+              operation: proposal.operation,
             })
           },
-          onUsage: () => undefined
-        }
+          onUsage: () => undefined,
+        },
       })
 
       usage = result.usage
@@ -336,24 +314,20 @@ export class ChatService {
         terminal = this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型请求已中止，请重试')
       } else if (!result.answerText.trim()) {
         terminal = result.roundLimitReached
-          ? this.errorEvent(
-              run,
-              'TOOL_EXECUTION_FAILED',
-              '工具调用轮数或次数已达上限，模型未能给出最终回答'
-            )
+          ? this.errorEvent(run, 'TOOL_EXECUTION_FAILED', '工具调用轮数或次数已达上限，模型未能给出最终回答')
           : this.errorEvent(run, 'MODEL_REQUEST_FAILED', '模型未返回内容')
       } else {
         const assistantMessage = store.appendAssistantMessage(
           conversation.id,
           result.text,
           this.now().toISOString(),
-          result.toolCalls
+          result.toolCalls,
         )
         terminal = {
           type: 'completed',
           requestId: run.requestId,
           conversationId: run.conversationId,
-          assistantMessage
+          assistantMessage,
         }
       }
     } catch (error) {
@@ -370,7 +344,7 @@ export class ChatService {
       }
 
       console.warn(
-        `[chat] 请求失败 requestId=${run.requestId} code=${terminal.type === 'error' ? terminal.code : 'UNKNOWN'}`
+        `[chat] 请求失败 requestId=${run.requestId} code=${terminal.type === 'error' ? terminal.code : 'UNKNOWN'}`,
       )
     } finally {
       clearTimeout(timer)
@@ -379,7 +353,7 @@ export class ChatService {
       const duration = Date.now() - startedAt
       if (terminal.type === 'completed') {
         console.info(
-          `[chat] 完成 requestId=${run.requestId} 耗时=${duration}ms 输入=${usage?.inputTokens ?? '-'} 输出=${usage?.outputTokens ?? '-'}`
+          `[chat] 完成 requestId=${run.requestId} 耗时=${duration}ms 输入=${usage?.inputTokens ?? '-'} 输出=${usage?.outputTokens ?? '-'}`,
         )
       }
 
@@ -440,7 +414,7 @@ export class ChatService {
     return {
       type: 'cancelled',
       requestId: run.requestId,
-      conversationId: run.conversationId
+      conversationId: run.conversationId,
     }
   }
 
@@ -450,12 +424,12 @@ export class ChatService {
       requestId: run.requestId,
       conversationId: run.conversationId,
       code,
-      message
+      message,
     }
   }
 }
 
 export const chatService = new ChatService({
   toolRegistry: createDefaultToolRegistry(),
-  editService
+  editService,
 })

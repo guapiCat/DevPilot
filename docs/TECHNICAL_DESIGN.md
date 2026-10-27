@@ -33,15 +33,16 @@ V1 必须形成可演示、可打包、可实际使用的完整闭环，而不�
 
 **必须实现：** - 独立研发聊天页面。 - IDE 风格研发工作区。 -
 选择、切换本地 Git 仓库。 - 文件树、文件预览/编辑展示。 - Git 状态与
-Diff 查看。 - DeepSeek 对话与流式输出。 - AI
+Diff 查看。 - 用户发起的暂存、提交、本地分支与远程同步（固定白名单，无
+force/reset/amend/rebase）。 - DeepSeek 对话与流式输出。 - AI
 通过受控工具搜索和读取代码。 - AI 提议文件修改、Diff
 审核、用户确认后应用。 - 本地保存仓库配置、对话、消息和修改会话。 -
 Windows 开发运行与安装包构建。 - 基本单元测试、错误提示和安全校验。
 
 **V1 暂不实现：** - 自动执行任意终端命令。 - 未经确认自动修改文件。 - 多
 Agent 协作。 - 大规模向量数据库和完整 RAG 平台。 - GitHub/GitLab
-远程仓库管理。 - 企业账号、团队权限和云端同步。 - 自动提交、推送或创建
-Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
+远程仓库管理。 - 企业账号、团队权限和云端同步。 - AI 自动提交、推送或创建
+Pull Request（用户仍可在源代码管理页手动执行 Git 写操作）。 - 自动执行测试、安装依赖或运行项目脚本。
 
 如果后续需要扩展，应先提出设计变更，不要在实现某个功能时悄悄扩大 V1
 范围。
@@ -65,7 +66,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
   数据验证     Zod                         IPC 输入、工具参数和模型结构校验
   本地数据库   SQLite + better-sqlite3     对话、仓库配置、编辑会话
   代码搜索     ripgrep                     本地快速搜索
-  Git 操作     Git CLI                     status、diff、分支等只读能力
+  Git 操作     Git CLI                     status/diff 与用户发起的远端/提交操作
   单元测试     Vitest                      工具、服务、数据逻辑测试
   打包         electron-builder            Windows 安装包
   代码规范     ESLint + Prettier           静态检查和格式化
@@ -93,7 +94,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
 ``` text
 ┌──────────────────────────────────────────────────────┐
 │ Renderer：Vue 3 + TypeScript                         │
-│ Chat / Workspace / Settings / File Tree / Monaco     │
+│ Chat / Workspace / Source Control / Settings / Monaco │
 │ Pinia / Vue Router / Element Plus                     │
 └────────────────────────┬─────────────────────────────┘
                          │ window.devPilot（受限 API）
@@ -107,6 +108,7 @@ Pull Request。 - 自动执行测试、安装依赖或运行项目脚本。
 │ IPC Handlers → Services → Repositories / Adapters    │
 │                                                      │
 │ Repository / File / Git / Search / AI / Diff / DB    │
+│ Git：只读查询 + 用户白名单写操作、错误分类            │
 │                                                      │
 │ AI Orchestrator → Tool Registry → 受控本地工具        │
 └──────────────┬────────────────────┬──────────────────┘
@@ -180,6 +182,7 @@ devpilot/
 │   │   │   ├── repository.service.ts
 │   │   │   ├── file.service.ts
 │   │   │   ├── git.service.ts
+│   │   │   ├── git-errors.ts
 │   │   │   ├── code-search.service.ts
 │   │   │   ├── ai.service.ts
 │   │   │   ├── diff.service.ts
@@ -220,14 +223,17 @@ devpilot/
 │   │       ├── views/
 │   │       │   ├── ChatView.vue
 │   │       │   ├── WorkspaceView.vue
+│   │       │   ├── SourceControlView.vue
 │   │       │   └── SettingsView.vue
 │   │       ├── components/
 │   │       │   ├── chat/
 │   │       │   ├── repository/
 │   │       │   ├── editor/
-│   │       │   └── diff/
+│   │       │   ├── diff/
+│   │       │   └── source-control/
 │   │       ├── stores/
 │   │       │   ├── chat.ts
+│   │       │   ├── git.ts
 │   │       │   ├── repository.ts
 │   │       │   └── workspace.ts
 │   │       ├── services/
@@ -239,7 +245,11 @@ devpilot/
 │       │   ├── repository.ts
 │       │   ├── chat.ts
 │       │   ├── ai.ts
-│       │   └── diff.ts
+│       │   ├── diff.ts
+│       │   └── git.ts
+│       ├── utils/
+│       │   ├── git.ts
+│       │   └── path.ts
 │       └── constants/
 └── tests/
     ├── unit/
@@ -255,7 +265,7 @@ devpilot/
 
 ### 5.1 全局导航
 
-左侧全局导航至少包含： - 研发对话 - 研发工作区 - 设置
+左侧全局导航至少包含： - 研发对话 - 研发工作区 - 源代码管理 - 设置
 
 ### 5.2 研发对话页
 
@@ -310,6 +320,23 @@ ChatService.configProvider = () => modelProfileService.resolveActive()
 - `toolsEnabled=false` 时既不绑定 ToolRegistry，也在 system prompt 中声明当前无工具。
 - 对话输入框工具栏的 `ModelSwitcher` 复用同一 `activateModelProfile` IPC 切换全局当前模型；chat store 保存完整 `AiConfigStatus`，切换后下一条消息生效。无档案但 `.env` 生效时仅显示只读的“环境变量 · 模型”标签。
 
+### 5.6 源代码管理页
+
+目标：让用户在不离开应用的情况下完成日常 Git 工作流，同时保持 AI 只读。页面为全高工具栏 + 三栏布局：
+
+- 顶部工具栏：仓库选择与打开、当前分支（点击打开分支对话框）、upstream 与 `↑ahead ↓behind`、fetch/pull/push（禁用条件与 tooltip）、刷新。
+- 左栏：`ChangesPanel`（已暂存/未暂存分组，单个与全部暂存/取消、冲突文件确认、选中查看 Diff）+ `CommitBox`（textarea、字数、已暂存数量、Ctrl+Enter 提交；分离 HEAD 时提示）。
+- 中栏：`HistoryPanel` 提交列表（shortSha、subject、作者、相对时间、加载更多）。
+- 右栏：选中提交时显示 `CommitDetail`（元信息、body、文件列表、`UnifiedDiffView`）；否则显示选中变更的工作区 Diff 与“在编辑器中打开”；都无时显示空状态。
+- 分支对话框 `BranchDialog`：筛选、本地分支列表（当前标记、upstream、commit、subject）、切换、新建分支（可选立即切换）。
+
+交互与联动：
+
+- 切换仓库时重置 git store，并刷新 status/branches/log/remote；页面挂载时若无当前仓库则自动选择最近一个。
+- 每次写成功后统一刷新上述四类数据。切分支或 pull 成功后重新加载文件树并清空工作区打开标签；存在未保存编辑或工作区有未提交修改时先确认。
+- 确认矩阵：暂存/取消暂存、提交（非分离 HEAD）、新建分支无需确认；分离 HEAD 提交、脏工作区切分支、pull（提示仅快进）、push（显示 remote/branch/ahead，首次推送提示设置 upstream）需要确认。确认只是 UX，主进程的固定参数与命令白名单才是硬约束。
+- `UnifiedDiffView` 从工作区 Diff 面板抽出，供变更、提交详情与工作区共用；仅使用已注册的 Element Plus 组件。
+
 ------------------------------------------------------------------------
 
 ## 6. 核心模块设计
@@ -350,13 +377,29 @@ ripgrep，应在打包阶段验证。
 
 ### 6.4 GitService
 
-V1 主要提供只读 Git 能力： - `git status` - `git diff` - 当前分支信息 -
-可选的文件变更概览
+读能力：
 
-安全约束： - 使用参数数组执行命令，不拼接用户输入到 shell 命令。 -
-仓库路径必须经过授权路径校验。 - 设置超时、输出长度上限和错误处理。 - V1
-不提供 AI 自动 commit、push、reset、checkout 或清理工作区能力。 - 不把
-Git 输出中的文件内容当作可信指令。
+- `status --porcelain=v1 -z --untracked-files=all` 与 `rev-parse --verify --quiet HEAD`，派生 `headState`（attached / detached / unborn）。
+- `diff --no-color --no-ext-diff <HEAD> -- <path>`；未提交仓库以空树 SHA 为基线；未跟踪文件由 `FileService.read` 生成合成 Diff。
+- `for-each-ref` 读取本地分支（上限 500）与 upstream，unborn 时用 `branch --show-current` 合成当前分支。
+- `log -z --max-count=<limit+1> --skip=<skip> --format=%H%x1f…` 读取历史，用 `-z` 分记录、`%x1f` 分字段，body 截断 4000；多取一条判断 `hasMore`。
+- `diff-tree --root --first-parent -m -r -M --no-commit-id --name-status -z` 读取提交文件列表（`-m` 让合并提交展示 first-parent 变更，`-M` 检测重命名），`show --first-parent --format=` 读取补丁；按 512 KB 截断。
+- `remote` 与 `rev-list --left-right --count @{upstream}...HEAD` 读取远程与 ahead/behind，不自动 fetch。
+
+写能力（仅由用户发起）：
+
+- `--literal-pathspecs add -- <paths>` / `add -A --`；有 HEAD 时 `restore --staged -- <paths|.>`，unborn 时 `rm --cached -r -q --`。
+- `-c commit.gpgsign=false commit -m <message>`（不 `-a`），成功后 `rev-parse --short HEAD`。
+- `branch -- <name>`、`switch -c <name>`、`switch -- <name>`。
+- `fetch --no-tags --no-recurse-submodules <remote>`；`pull --ff-only --no-recurse-submodules <remote> <remoteBranch>`；`push --porcelain <remote> HEAD:<branch>` 或首次 `--set-upstream <remote> HEAD`。
+
+安全约束：
+
+- 使用参数数组执行命令、`shell: false`，不拼接用户输入到 shell 命令；仓库根目录只来自 `RepositoryService`。
+- IPC 层 Zod 校验 + 服务层二次校验：`isSafeBranchName`、`isSafeGitPath`（拒绝 `:` 前缀）、提交信息长度/NUL、SHA 40/64 位小写十六进制、remote 名 `[A-Za-z0-9._-]`。
+- 本地写 30 秒、网络 60 秒超时，输出上限 5 MB；网络命令禁用交互式凭据提示并限制协议为 `https:ssh:file`。
+- 不提供 reset、clean、amend、rebase、stash、force、删除分支/远端或任意 Git 参数入口；不把 Git 输出中的文件内容当作可信指令。
+- 失败由 `classifyGitFailure` 映射为固定中文错误码与消息，日志只记录 operation / exitCode / code。
 
 ### 6.5 DiffService
 
@@ -598,6 +641,19 @@ interface DevPilotApi {
   }
   git: {
     status(repositoryId: string): Promise<GitStatus>
+    diff(repositoryId: string, relativePath: string): Promise<GitDiff>
+    listBranches(repositoryId: string): Promise<GitBranchList>
+    stage(repositoryId: string, input: GitPathsInput): Promise<void>
+    unstage(repositoryId: string, input: GitPathsInput): Promise<void>
+    commit(repositoryId: string, message: string): Promise<GitCommitResult>
+    createBranch(repositoryId: string, branchName: string, checkout: boolean): Promise<void>
+    switchBranch(repositoryId: string, branchName: string): Promise<void>
+    log(repositoryId: string, options?: { limit?: number; skip?: number }): Promise<GitLogResult>
+    commitDetail(repositoryId: string, sha: string): Promise<GitCommitDetail>
+    remoteStatus(repositoryId: string): Promise<GitRemoteStatus>
+    fetch(repositoryId: string): Promise<void>
+    pull(repositoryId: string): Promise<void>
+    push(repositoryId: string): Promise<void>
   }
   ai: {
     sendMessage(input: SendMessageInput): Promise<void>
@@ -700,6 +756,10 @@ ID。 - 工具事件和错误状态。
 `workspace` store： - 当前打开的文件。 - 标签页。 - 右侧面板和 Diff
 面板展开状态。 - 当前选中的编辑提案。
 
+`git` store： - 分支列表与当前分支。 - 提交历史与分页状态。 - 选中的
+commit detail。 - 远程状态（upstream、ahead/behind）与写操作 busy 状态。 -
+以当前仓库 ID 作为请求令牌丢弃过期响应；每次写成功后刷新 status、分支、历史与远程状态。
+
 不要把完整数据库访问逻辑放进 Store。Store 通过 `desktop-api.ts` 调用
 Preload API，再更新 UI 状态。
 
@@ -776,6 +836,14 @@ export type ChatEvent =
 `REQUEST_CANCELLED`：用户取消。 - `DATABASE_ERROR`：数据库操作失败。 -
 `INTERNAL_ERROR`：未预期异常。
 
+Git 错误码（固定中文消息，不返回 stderr 原文）：`NOT_A_GIT_REPOSITORY`、
+`GIT_NOT_AVAILABLE`、`GIT_TIMEOUT`、`GIT_OUTPUT_TOO_LARGE`、`GIT_INDEX_LOCKED`、
+`GIT_NOTHING_TO_COMMIT`、`GIT_IDENTITY_MISSING`、`GIT_BRANCH_EXISTS`、
+`GIT_BRANCH_NOT_FOUND`、`GIT_BRANCH_IN_USE`、`GIT_WORKTREE_DIRTY`、`GIT_CONFLICT`、
+`GIT_NON_FAST_FORWARD`、`GIT_AUTH_REQUIRED`、`GIT_NETWORK_ERROR`、`GIT_NO_REMOTE`、
+`GIT_NO_UPSTREAM`、`GIT_REMOTE_REJECTED`、`GIT_HOOK_FAILED`、
+`GIT_COMMIT_NOT_FOUND`、`GIT_COMMAND_FAILED`。
+
 要求： - 用户界面展示可操作的错误说明。 -
 开发日志保留必要上下文，但不得泄露 API Key。 -
 对网络错误、限流、超时提供适当提示。 - 不允许 catch 后静默吞掉异常。 -
@@ -789,7 +857,9 @@ export type ChatEvent =
 ### 15.1 单元测试
 
 优先覆盖： - 路径规范化和路径穿越防护。 - 文件读取限制。 -
-代码搜索参数构造。 - Git 输出解析。 - Diff 提案状态流转。 -
+代码搜索参数构造。 - Git 输出解析（status、branch、log、commit detail、remote）。 -
+Git 写命令参数与输入校验（分支名、pathspec、提交信息、SHA）。 -
+Git 错误分类与固定消息。 - Diff 提案状态流转。 -
 原始哈希一致性检查。 - Zod 输入校验。 - Agent 最大轮数和工具错误处理。 -
 SQLite Repository 层的 CRUD 与事务。 - 模型档案 CRUD、单 active、密钥加解密与 `.env` 兜底。 -
 Base URL 协议规则、OpenAI 兼容适配器与工具开关。
@@ -797,7 +867,7 @@ Base URL 协议规则、OpenAI 兼容适配器与工具开关。
 ### 15.2 集成测试
 
 至少验证： - Main IPC Handler 到 Service 的主要调用链。 - 临时 Git
-仓库的 status/diff。 - 文件修改提案从生成、审核到应用的闭环。 -
+仓库的 status/diff、暂存/取消暂存、提交、历史与单次提交详情、分支新建/切换，以及本地 bare remote 的 fetch/快进 pull/push。 - 文件修改提案从生成、审核到应用的闭环。 -
 数据库初始化与迁移。 - 模型调用可通过 Mock Adapter
 测试，不要求每次自动化测试都访问真实 DeepSeek API。
 
@@ -879,6 +949,12 @@ README、安装和配置说明。 - 安全与隐私说明。
 
 完成标准： - 可在目标 Windows 环境安装启动。 -
 核心验收流程可完整演示。 - 已知限制、配置方法和数据目录文档齐全。
+
+### 阶段 8：源代码管理（用户发起的 Git 写操作）
+
+实现： - 独立源代码管理页与导航。 - 暂存/取消暂存（单个与全部）。 - 提交与提交历史、单次提交 Diff。 - 本地分支列表、新建与切换。 - 远程 fetch、快进 pull、push。 - 写操作确认、固定命令白名单、错误分类与状态刷新联动。
+
+完成标准： - 用户可在应用内完成暂存、提交、查看历史、新建/切换分支与远程同步。 - 破坏性命令（force/reset/clean/amend/rebase/stash/删除分支）不可达。 - 路径、分支名、提交信息与 SHA 经双重校验；错误不泄漏 stderr。 - AI 工具保持只读，不能触发任何 Git 写操作。 - 需要 Git ≥ 2.23（`git switch`）。
 
 ------------------------------------------------------------------------
 
@@ -974,6 +1050,10 @@ Key 提交到仓库。 - 引入向量数据库、多 Agent 或独立后端服务
 -   [ ] 用户确认后目标文件被正确修改。
 -   [ ] 文件被外部修改时旧提案不能覆盖它。
 -   [ ] 修改后 Git 状态正确刷新。
+-   [ ] 用户可以在源代码管理页暂存/取消暂存并提交。
+-   [ ] 用户可以查看提交历史与单次提交 Diff，并新建/切换本地分支。
+-   [ ] 用户可以对已配置的远端执行 fetch、快进 pull 与 push；非快进推送被拒绝。
+-   [ ] AI 工具无法执行任何 Git 写操作。
 -   [ ] 对话、仓库和编辑会话能够持久化。
 -   [ ] 路径穿越、超大文件、API 错误和取消请求有明确处理。
 -   [ ] 原生 SQLite 模块在 Windows 安装包中正常工作。

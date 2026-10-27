@@ -19,13 +19,13 @@ export function buildAppInfo(source: AppInfoSource): AppInfo {
     electronVersion: source.electronVersion,
     chromeVersion: source.chromeVersion,
     nodeVersion: source.nodeVersion,
-    userDataPath: source.userDataPath
+    userDataPath: source.userDataPath,
   }
 }
 
 export function createPingResponse(message: string, now: Date = new Date()): PingResponse {
   return {
     message,
-    receivedAt: now.toISOString()
+    receivedAt: now.toISOString(),
   }
 }

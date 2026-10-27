@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import {
-  ChatDotRound,
-  Delete,
-  DocumentCopy,
-  FolderAdd,
-  FolderOpened,
-  Plus
-} from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, DocumentCopy, FolderAdd, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
 import type { AppliedFileEdit } from '@shared/types/edit'
 import type { RepositorySummary } from '@shared/types/repository'
@@ -24,19 +17,13 @@ import { useRepositoryStore } from '@renderer/stores/repository'
 import { useWorkspaceStore } from '@renderer/stores/workspace'
 import { toErrorMessage } from '@renderer/utils/errors'
 
+const route = useRoute()
 const repository = useRepositoryStore()
 const workspace = useWorkspaceStore()
 const chat = useChatStore()
 
-const {
-  repositories,
-  activeRepository,
-  fileTree,
-  fileTreeLoading,
-  fileTreeTruncated,
-  gitStatus,
-  gitChangeCount
-} = storeToRefs(repository)
+const { repositories, activeRepository, fileTree, fileTreeLoading, fileTreeTruncated, gitStatus, gitChangeCount } =
+  storeToRefs(repository)
 const { rightPanelVisible, diffPanelVisible } = storeToRefs(workspace)
 const { conversations, activeConversationId, isCreatingConversation } = storeToRefs(chat)
 
@@ -53,15 +40,11 @@ async function confirmDiscardUnsaved(action: string): Promise<boolean> {
   if (!workspace.hasDirtyFiles) return true
 
   try {
-    await ElMessageBox.confirm(
-      `有未保存的文件修改，${action}将丢失这些修改。是否继续？`,
-      '未保存的修改',
-      {
-        confirmButtonText: '继续',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
+    await ElMessageBox.confirm(`有未保存的文件修改，${action}将丢失这些修改。是否继续？`, '未保存的修改', {
+      confirmButtonText: '继续',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
     return true
   } catch {
     return false
@@ -146,8 +129,8 @@ async function handleRemoveRepository(repo: RepositorySummary): Promise<void> {
       {
         confirmButtonText: '移出',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
+        type: 'warning',
+      },
     )
   } catch {
     return
@@ -263,6 +246,11 @@ onMounted(() => {
       } else if (activeRepository.value) {
         void repository.refreshGitStatus()
       }
+
+      const requestedFile = typeof route.query.file === 'string' ? route.query.file : null
+      if (requestedFile && activeRepository.value) {
+        await handleOpenFile(requestedFile)
+      }
     } catch (error) {
       selectError.value = toErrorMessage(error)
     }
@@ -282,16 +270,9 @@ onBeforeUnmount(() => {
         <span>{{ activeRepository?.name ?? '未选择仓库' }}</span>
         <template v-if="activeRepository?.isGitRepository">
           <span class="git-branch" title="当前分支">{{ gitStatus?.branch ?? 'HEAD' }}</span>
-          <span v-if="gitChangeCount > 0" class="git-change-count">
-            {{ gitChangeCount }} 个变更
-          </span>
+          <span v-if="gitChangeCount > 0" class="git-change-count"> {{ gitChangeCount }} 个变更 </span>
         </template>
-        <el-tag
-          v-if="activeRepository && !activeRepository.isGitRepository"
-          size="small"
-          type="warning"
-          effect="plain"
-        >
+        <el-tag v-if="activeRepository && !activeRepository.isGitRepository" size="small" type="warning" effect="plain">
           非 Git
         </el-tag>
       </div>
@@ -302,8 +283,7 @@ onBeforeUnmount(() => {
         class="repo-switcher"
         size="small"
         placeholder="切换仓库"
-        @change="handleSwitchRepository"
-      >
+        @change="handleSwitchRepository">
         <el-option v-for="repo in repositories" :key="repo.id" :label="repo.name" :value="repo.id">
           <span class="repo-option">
             <span class="repo-option-name">{{ repo.name }}</span>
@@ -314,20 +294,14 @@ onBeforeUnmount(() => {
               title="移出仓库列表（不删除磁盘文件）"
               :aria-label="`移出仓库 ${repo.name}`"
               @mousedown.stop.prevent
-              @click.stop.prevent="handleRemoveRepository(repo)"
-            >
+              @click.stop.prevent="handleRemoveRepository(repo)">
               <el-icon :size="13"><Delete /></el-icon>
             </button>
           </span>
         </el-option>
       </el-select>
 
-      <el-button
-        size="small"
-        :icon="FolderAdd"
-        :loading="selecting"
-        @click="handleSelectRepository"
-      >
+      <el-button size="small" :icon="FolderAdd" :loading="selecting" @click="handleSelectRepository">
         选择仓库
       </el-button>
 
@@ -337,8 +311,7 @@ onBeforeUnmount(() => {
         type="button"
         class="toolbar-toggle"
         :class="{ active: rightPanelVisible }"
-        @click="workspace.toggleRightPanel()"
-      >
+        @click="workspace.toggleRightPanel()">
         <el-icon :size="14"><ChatDotRound /></el-icon>
         <span>AI 助手</span>
       </button>
@@ -346,8 +319,7 @@ onBeforeUnmount(() => {
         type="button"
         class="toolbar-toggle"
         :class="{ active: diffPanelVisible }"
-        @click="workspace.toggleDiffPanel()"
-      >
+        @click="workspace.toggleDiffPanel()">
         <el-icon :size="14"><DocumentCopy /></el-icon>
         <span>变更与 Diff</span>
       </button>
@@ -367,16 +339,14 @@ onBeforeUnmount(() => {
               :title="selectError"
               type="error"
               show-icon
-              :closable="false"
-            />
+              :closable="false" />
             <el-alert
               v-if="fileTreeTruncated"
               class="repo-error"
               :title="`文件树超过 ${MAX_FILE_TREE_ENTRIES} 项，已截断显示`"
               type="warning"
               show-icon
-              :closable="false"
-            />
+              :closable="false" />
             <FileTree :nodes="fileTree" :loading="fileTreeLoading" @open="handleOpenFile" />
           </div>
         </aside>
@@ -393,14 +363,12 @@ onBeforeUnmount(() => {
                 class="conversation-select"
                 size="small"
                 placeholder="选择会话"
-                @change="handleSelectConversation"
-              >
+                @change="handleSelectConversation">
                 <el-option
                   v-for="conversation in conversations"
                   :key="conversation.id"
                   :label="conversation.title"
-                  :value="conversation.id"
-                />
+                  :value="conversation.id" />
               </el-select>
               <el-tooltip content="新建会话" placement="bottom">
                 <el-button
@@ -409,8 +377,7 @@ onBeforeUnmount(() => {
                   aria-label="新建会话"
                   :icon="Plus"
                   :loading="isCreatingConversation"
-                  @click="handleNewConversation"
-                />
+                  @click="handleNewConversation" />
               </el-tooltip>
               <el-button text size="small" @click="workspace.toggleRightPanel()">收起</el-button>
             </div>

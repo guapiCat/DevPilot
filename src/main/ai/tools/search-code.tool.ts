@@ -9,7 +9,7 @@ import {
   MAX_SEARCH_RAW_BYTES,
   MAX_SEARCH_SNIPPET_CHARS,
   MAX_TOOL_OUTPUT_CHARS,
-  RG_COMMAND_TIMEOUT_MS
+  RG_COMMAND_TIMEOUT_MS,
 } from '@shared/constants/app'
 import { isSafeRelativePath } from '@shared/utils/path'
 import { repositoryService } from '@main/services/repository.service'
@@ -44,7 +44,7 @@ const schema = z.strictObject({
   path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH).optional(),
   mode: z.enum(['literal', 'regex']).optional(),
   // smart：查询全小写时忽略大小写，含大写时区分大小写（rg 默认行为更贴近 IDE 搜索）。
-  case: z.enum(['smart', 'sensitive', 'insensitive']).optional()
+  case: z.enum(['smart', 'sensitive', 'insensitive']).optional(),
 })
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -84,14 +84,14 @@ const IGNORED_GLOBS: readonly string[] = [
   '!**/go.sum',
   '!**/*.min.js',
   '!**/*.min.css',
-  '!**/*.map'
+  '!**/*.map',
 ]
 
 export function buildSearchArgs(
   query: string,
   scope: string,
   mode: SearchMode,
-  caseMode: SearchCase = 'smart'
+  caseMode: SearchCase = 'smart',
 ): string[] {
   const caseFlag = caseMode === 'insensitive' ? '-i' : caseMode === 'sensitive' ? '-s' : '-S'
 
@@ -111,7 +111,7 @@ export function buildSearchArgs(
     query,
     ...IGNORED_GLOBS.flatMap((glob) => ['--glob', glob]),
     '--',
-    scope
+    scope,
   ]
 }
 
@@ -154,14 +154,12 @@ export function parseRgJson(stdout: string): ParsedSearchResult {
       continue
     }
 
-    const snippet = redactSecretSnippet(
-      clampText(lineText.replace(/\r?\n$/, ''), MAX_SEARCH_SNIPPET_CHARS)
-    )
+    const snippet = redactSecretSnippet(clampText(lineText.replace(/\r?\n$/, ''), MAX_SEARCH_SNIPPET_CHARS))
     perFile.set(relativePath, current + 1)
     matches.push({
       path: relativePath,
       line: typeof data.line_number === 'number' ? data.line_number : 0,
-      text: snippet
+      text: snippet,
     })
   }
 
@@ -172,7 +170,7 @@ function runSearch(
   cwd: string,
   args: string[],
   signal: AbortSignal,
-  maxRawBytes: number
+  maxRawBytes: number,
 ): Promise<{ stdout: string; exitCode: number; truncated: boolean }> {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveRgCommand(), args, { cwd, shell: false, windowsHide: true })
@@ -180,6 +178,8 @@ function runSearch(
     let stdoutSize = 0
     let settled = false
     let timedOut = false
+    // 超限后等待 close 再返回，避免调用方在子进程仍持有目录句柄时清理工作区。
+    let truncatedByLimit = false
 
     const timer = setTimeout(() => {
       timedOut = true
@@ -209,18 +209,13 @@ function runSearch(
     }
 
     child.stdout.on('data', (chunk: Buffer) => {
-      if (settled) return
+      if (settled || truncatedByLimit) return
       // 原始输出超限时保留已收到的部分，交给解析层裁剪成截断结果；
       // 末尾不完整的 JSON 行由 parseRgJson 跳过，不再让整次搜索失败。
+      // 终止子进程后由 close 事件返回，确保进程已退出。
       if (stdoutSize + chunk.length > maxRawBytes) {
+        truncatedByLimit = true
         child.kill()
-        settle(() =>
-          resolve({
-            stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-            exitCode: 0,
-            truncated: true
-          })
-        )
         return
       }
       stdoutSize += chunk.length
@@ -233,12 +228,7 @@ function runSearch(
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'ENOENT') {
         settle(() =>
-          reject(
-            new ToolExecutionError(
-              'RG_NOT_AVAILABLE',
-              '未检测到 ripgrep（rg），请安装并确保 rg 在 PATH 中'
-            )
-          )
+          reject(new ToolExecutionError('RG_NOT_AVAILABLE', '未检测到 ripgrep（rg），请安装并确保 rg 在 PATH 中')),
         )
         return
       }
@@ -254,9 +244,9 @@ function runSearch(
       settle(() =>
         resolve({
           stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-          exitCode: code ?? -1,
-          truncated: false
-        })
+          exitCode: truncatedByLimit ? 0 : (code ?? -1),
+          truncated: truncatedByLimit,
+        }),
       )
     })
   })
@@ -264,7 +254,7 @@ function runSearch(
 
 export function createSearchCodeTool(
   repositories: RootProvider = repositoryService,
-  options: { maxRawBytes?: number } = {}
+  options: { maxRawBytes?: number } = {},
 ): ToolDefinition<typeof schema> {
   const maxRawBytes = options.maxRawBytes ?? MAX_SEARCH_RAW_BYTES
 
@@ -278,11 +268,7 @@ export function createSearchCodeTool(
       const scope = path ? ` @ ${path}` : ''
       const mode = args.mode === 'regex' ? '（正则）' : ''
       const caseLabel =
-        args.case === 'insensitive'
-          ? '（忽略大小写）'
-          : args.case === 'sensitive'
-            ? '（区分大小写）'
-            : ''
+        args.case === 'insensitive' ? '（忽略大小写）' : args.case === 'sensitive' ? '（区分大小写）' : ''
       return `"${clampText(args.query, 60)}"${mode}${caseLabel}${scope}`
     },
     async execute(args, context) {
@@ -295,7 +281,7 @@ export function createSearchCodeTool(
         if (!isSafeRelativePath(requestedPath)) {
           throw new ToolExecutionError(
             'PATH_NOT_ALLOWED',
-            '搜索路径必须是仓库内的相对路径；搜索整个仓库请省略 path 参数'
+            '搜索路径必须是仓库内的相对路径；搜索整个仓库请省略 path 参数',
           )
         }
         if (isSensitivePath(requestedPath)) {
@@ -310,12 +296,7 @@ export function createSearchCodeTool(
 
       let result: { stdout: string; exitCode: number; truncated: boolean }
       try {
-        result = await runSearch(
-          root,
-          buildSearchArgs(args.query, scope, mode, caseMode),
-          context.signal,
-          maxRawBytes
-        )
+        result = await runSearch(root, buildSearchArgs(args.query, scope, mode, caseMode), context.signal, maxRawBytes)
       } catch (error) {
         throw toToolError(error)
       }
@@ -324,7 +305,7 @@ export function createSearchCodeTool(
         return {
           content: `# 搜索: "${args.query}"\n未找到匹配内容。`,
           summary: '未找到匹配',
-          truncated: false
+          truncated: false,
         }
       }
 
@@ -336,16 +317,12 @@ export function createSearchCodeTool(
       const truncated = parsed.truncated || result.truncated
       const modeLabel = mode === 'regex' ? '正则' : '字面量'
       const caseLabel =
-        caseMode === 'insensitive'
-          ? '忽略大小写'
-          : caseMode === 'sensitive'
-            ? '区分大小写'
-            : '智能大小写'
+        caseMode === 'insensitive' ? '忽略大小写' : caseMode === 'sensitive' ? '区分大小写' : '智能大小写'
       const header = [
         `# 搜索: "${args.query}"（${modeLabel}，${caseLabel}）`,
         `匹配 ${parsed.matches.length} 条，涉及 ${parsed.fileCount} 个文件${
           truncated ? '（结果已截断，仅包含部分匹配；请用 path 缩小范围或使用更精确的查询）' : ''
-        }`
+        }`,
       ].join('\n')
       const grouped = new Map<string, SearchMatch[]>()
       for (const match of parsed.matches) {
@@ -357,7 +334,7 @@ export function createSearchCodeTool(
         parsed.matches.length > 0
           ? [...grouped.entries()]
               .map(([path, matches]) =>
-                [`## ${path}`, ...matches.map((match) => `${match.line}: ${match.text}`)].join('\n')
+                [`## ${path}`, ...matches.map((match) => `${match.line}: ${match.text}`)].join('\n'),
               )
               .join('\n\n')
           : truncated
@@ -367,11 +344,9 @@ export function createSearchCodeTool(
 
       return {
         content: capped.text,
-        summary: `${parsed.matches.length} 条匹配 / ${parsed.fileCount} 个文件${
-          truncated ? '（已截断）' : ''
-        }`,
-        truncated: capped.truncated || truncated
+        summary: `${parsed.matches.length} 条匹配 / ${parsed.fileCount} 个文件${truncated ? '（已截断）' : ''}`,
+        truncated: capped.truncated || truncated,
       }
-    }
+    },
   }
 }

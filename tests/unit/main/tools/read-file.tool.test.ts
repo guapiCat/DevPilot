@@ -82,20 +82,20 @@ describe('read_file 工具', () => {
   })
 
   it('结束行小于起始行时返回 INVALID_ARGUMENTS', async () => {
-    await expect(
-      tool.execute({ path: 'sample.ts', startLine: 4, endLine: 2 }, context)
-    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENTS' })
+    await expect(tool.execute({ path: 'sample.ts', startLine: 4, endLine: 2 }, context)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENTS',
+    })
   })
 
   it('阻断 .env、私钥内容与二进制文件', async () => {
     await expect(tool.execute({ path: '.env' }, context)).rejects.toMatchObject({
-      code: 'SENSITIVE_FILE'
+      code: 'SENSITIVE_FILE',
     })
     await expect(tool.execute({ path: 'secret.ts' }, context)).rejects.toMatchObject({
-      code: 'SENSITIVE_FILE'
+      code: 'SENSITIVE_FILE',
     })
     await expect(tool.execute({ path: 'binary.dat' }, context)).rejects.toMatchObject({
-      code: 'UNSUPPORTED_FILE'
+      code: 'UNSUPPORTED_FILE',
     })
   })
 
@@ -114,19 +114,19 @@ describe('read_file 工具', () => {
 
   it('根目录写法不能作为文件读取', async () => {
     await expect(tool.execute({ path: '.' }, context)).rejects.toMatchObject({
-      code: 'INVALID_ARGUMENTS'
+      code: 'INVALID_ARGUMENTS',
     })
     await expect(tool.execute({ path: './' }, context)).rejects.toMatchObject({
-      code: 'INVALID_ARGUMENTS'
+      code: 'INVALID_ARGUMENTS',
     })
   })
 
   it('缺失文件与路径穿越返回稳定错误码', async () => {
     await expect(tool.execute({ path: 'missing.ts' }, context)).rejects.toMatchObject({
-      code: 'FILE_NOT_FOUND'
+      code: 'FILE_NOT_FOUND',
     })
     await expect(tool.execute({ path: '../outside.ts' }, context)).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
   })
 })

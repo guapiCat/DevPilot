@@ -31,8 +31,7 @@ function activate(): void {
       class="tree-row"
       :style="{ paddingLeft: `${depth * 14 + 10}px` }"
       :aria-expanded="isDirectory ? expanded : undefined"
-      @click="activate"
-    >
+      @click="activate">
       <el-icon v-if="isDirectory" class="chevron" :class="{ expanded }" :size="12">
         <ArrowRight />
       </el-icon>
@@ -53,8 +52,7 @@ function activate(): void {
         :key="child.relativePath"
         :node="child"
         :depth="depth + 1"
-        @open="emit('open', $event)"
-      />
+        @open="emit('open', $event)" />
     </ul>
   </li>
 </template>

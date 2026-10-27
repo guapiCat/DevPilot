@@ -64,7 +64,7 @@ describe('RepositoryService.register', () => {
 
   it('拒绝不存在的目录', async () => {
     await expect(service.register(join(repositoryPath, 'missing'))).rejects.toMatchObject({
-      code: 'VALIDATION_ERROR'
+      code: 'VALIDATION_ERROR',
     })
   })
 })
@@ -85,7 +85,7 @@ describe('RepositoryService.getTree', () => {
 
   it('未登记的仓库返回 REPOSITORY_NOT_FOUND', async () => {
     await expect(service.getTree('00000000-0000-4000-8000-000000000000')).rejects.toMatchObject({
-      code: 'REPOSITORY_NOT_FOUND'
+      code: 'REPOSITORY_NOT_FOUND',
     })
   })
 
@@ -94,7 +94,7 @@ describe('RepositoryService.getTree', () => {
     await rm(repositoryPath, { recursive: true, force: true })
 
     await expect(service.getTree(summary.id)).rejects.toMatchObject({
-      code: 'REPOSITORY_NOT_FOUND'
+      code: 'REPOSITORY_NOT_FOUND',
     })
   })
 })
@@ -124,8 +124,8 @@ describe('RepositoryService 持久化', () => {
         id: summary.id,
         name: summary.name,
         path: summary.path,
-        isGitRepository: true
-      })
+        isGitRepository: true,
+      }),
     ])
 
     const again = await restored.register(repositoryPath)
@@ -160,7 +160,7 @@ describe('RepositoryService.remove', () => {
     expect(service.list()).toEqual([])
     expect(existsSync(repositoryPath)).toBe(true)
     await expect(service.getTree(summary.id)).rejects.toMatchObject({
-      code: 'REPOSITORY_NOT_FOUND'
+      code: 'REPOSITORY_NOT_FOUND',
     })
   })
 
@@ -209,10 +209,10 @@ describe('RepositoryService.resolveFilePath', () => {
       'src/../../outside.txt',
       '/etc/passwd',
       'C:\\Windows\\win.ini',
-      '\\\\server\\share\\file.txt'
+      '\\\\server\\share\\file.txt',
     ]) {
       await expect(service.resolveFilePath(summary.id, relativePath)).rejects.toMatchObject({
-        code: 'PATH_NOT_ALLOWED'
+        code: 'PATH_NOT_ALLOWED',
       })
     }
   })
@@ -221,7 +221,7 @@ describe('RepositoryService.resolveFilePath', () => {
     const summary = await service.register(repositoryPath)
 
     await expect(service.resolveFilePath(summary.id, 'missing.txt')).rejects.toMatchObject({
-      code: 'FILE_NOT_FOUND'
+      code: 'FILE_NOT_FOUND',
     })
   })
 
@@ -240,7 +240,7 @@ describe('RepositoryService.resolveFilePath', () => {
 
     try {
       await expect(service.resolveFilePath(summary.id, 'linked/secret.txt')).rejects.toMatchObject({
-        code: 'PATH_NOT_ALLOWED'
+        code: 'PATH_NOT_ALLOWED',
       })
     } finally {
       await rm(linkPath, { force: true })

@@ -40,7 +40,7 @@ function toRecord(row: ModelProfileRow): ModelProfileRecord {
     toolsEnabled: row.tools_enabled === 1,
     isActive: row.is_active === 1,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }
 }
 
@@ -48,9 +48,7 @@ export class ModelProfileStore {
   constructor(private readonly db: Database.Database) {}
 
   count(): number {
-    const row = this.db
-      .prepare<[], { total: number }>('SELECT COUNT(*) AS total FROM model_profiles')
-      .get()
+    const row = this.db.prepare<[], { total: number }>('SELECT COUNT(*) AS total FROM model_profiles').get()
     return row?.total ?? 0
   }
 
@@ -59,7 +57,7 @@ export class ModelProfileStore {
       .prepare<[], ModelProfileRow>(
         `SELECT ${COLUMNS}
          FROM model_profiles
-         ORDER BY is_active DESC, updated_at DESC, rowid DESC`
+         ORDER BY is_active DESC, updated_at DESC, rowid DESC`,
       )
       .all()
 
@@ -67,18 +65,14 @@ export class ModelProfileStore {
   }
 
   findById(id: string): ModelProfileRecord | undefined {
-    const row = this.db
-      .prepare<[string], ModelProfileRow>(`SELECT ${COLUMNS} FROM model_profiles WHERE id = ?`)
-      .get(id)
+    const row = this.db.prepare<[string], ModelProfileRow>(`SELECT ${COLUMNS} FROM model_profiles WHERE id = ?`).get(id)
 
     return row ? toRecord(row) : undefined
   }
 
   getActive(): ModelProfileRecord | undefined {
     const row = this.db
-      .prepare<[], ModelProfileRow>(
-        `SELECT ${COLUMNS} FROM model_profiles WHERE is_active = 1 LIMIT 1`
-      )
+      .prepare<[], ModelProfileRow>(`SELECT ${COLUMNS} FROM model_profiles WHERE is_active = 1 LIMIT 1`)
       .get()
 
     return row ? toRecord(row) : undefined
@@ -88,12 +82,10 @@ export class ModelProfileStore {
     this.db.transaction(() => {
       if (record.isActive) this.deactivateAll()
       this.db
-        .prepare<
-          [string, string, string, string, string, string | null, number, number, string, string]
-        >(
+        .prepare<[string, string, string, string, string, string | null, number, number, string, string]>(
           `INSERT INTO model_profiles
              (id, name, provider, base_url, model, api_key_cipher, tools_enabled, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           record.id,
@@ -105,7 +97,7 @@ export class ModelProfileStore {
           record.toolsEnabled ? 1 : 0,
           record.isActive ? 1 : 0,
           record.createdAt,
-          record.updatedAt
+          record.updatedAt,
         )
     })()
   }
@@ -116,7 +108,7 @@ export class ModelProfileStore {
         `UPDATE model_profiles
          SET name = ?, provider = ?, base_url = ?, model = ?, api_key_cipher = ?,
              tools_enabled = ?, updated_at = ?
-         WHERE id = ?`
+         WHERE id = ?`,
       )
       .run(
         record.name,
@@ -126,7 +118,7 @@ export class ModelProfileStore {
         record.apiKeyCipher,
         record.toolsEnabled ? 1 : 0,
         record.updatedAt,
-        record.id
+        record.id,
       )
   }
 
@@ -163,7 +155,7 @@ export class ModelProfileStore {
         `SELECT ${COLUMNS}
          FROM model_profiles
          ORDER BY updated_at DESC, rowid DESC
-         LIMIT 1`
+         LIMIT 1`,
       )
       .get()
 

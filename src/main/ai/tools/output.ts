@@ -14,7 +14,7 @@ export function capText(text: string, maxChars: number): { text: string; truncat
 
   return {
     text: `${body}\n[输出已截断：上限 ${maxChars} 字符]`,
-    truncated: true
+    truncated: true,
   }
 }
 

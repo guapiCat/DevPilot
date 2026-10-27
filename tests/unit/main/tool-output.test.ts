@@ -18,9 +18,7 @@ describe('capText', () => {
     const text = 'a'.repeat(10) + '\n' + 'b'.repeat(100)
     const result = capText(text, 50)
     expect(result.truncated).toBe(true)
-    expect(result.text).toBe(
-      'a'.repeat(10) + '\n' + 'b'.repeat(39) + '\n[输出已截断：上限 50 字符]'
-    )
+    expect(result.text).toBe('a'.repeat(10) + '\n' + 'b'.repeat(39) + '\n[输出已截断：上限 50 字符]')
   })
 })
 
@@ -42,7 +40,7 @@ describe('toPosixRelative', () => {
 describe('formatToolError', () => {
   it('生成稳定的工具错误文本', () => {
     expect(formatToolError('read_file', 'SENSITIVE_FILE', '不能读取敏感文件')).toBe(
-      '[工具错误] read_file SENSITIVE_FILE: 不能读取敏感文件'
+      '[工具错误] read_file SENSITIVE_FILE: 不能读取敏感文件',
     )
   })
 })

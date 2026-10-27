@@ -6,7 +6,7 @@ import {
   chatDeleteConversationInputSchema,
   chatGetMessagesInputSchema,
   chatRetryInputSchema,
-  chatSendInputSchema
+  chatSendInputSchema,
 } from '@shared/schemas/ipc'
 import { chatService, type ChatEventSink } from '../services/chat.service'
 import { ipcErrorFrom } from '../utils/ipc-error'

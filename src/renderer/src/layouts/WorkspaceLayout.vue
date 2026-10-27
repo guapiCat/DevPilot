@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, type Component } from 'vue'
-import { ChatDotRound, FolderOpened, Moon, Setting, Sunny } from '@element-plus/icons-vue'
+import { ChatDotRound, Connection, FolderOpened, Moon, Setting, Sunny } from '@element-plus/icons-vue'
 import logoUrl from '@renderer/assets/logo.svg'
 import FishWhackGame from '@renderer/components/FishWhackGame.vue'
 import { desktopApi } from '@renderer/services/desktop-api'
@@ -15,7 +15,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'chat', label: '研发对话', icon: ChatDotRound },
   { name: 'workspace', label: '研发工作区', icon: FolderOpened },
-  { name: 'settings', label: '设置', icon: Setting }
+  { name: 'source-control', label: '源代码管理', icon: Connection },
+  { name: 'settings', label: '设置', icon: Setting },
 ]
 
 const appVersion = ref('0.1.0')
@@ -43,12 +44,7 @@ onMounted(async () => {
       </div>
 
       <nav class="nav">
-        <router-link
-          v-for="item in navItems"
-          :key="item.name"
-          :to="{ name: item.name }"
-          class="nav-item"
-        >
+        <router-link v-for="item in navItems" :key="item.name" :to="{ name: item.name }" class="nav-item">
           <el-icon :size="17"><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
         </router-link>
@@ -63,8 +59,7 @@ onMounted(async () => {
           class="theme-toggle"
           :title="theme.mode === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
           :aria-label="theme.mode === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
-          @click="theme.toggle()"
-        >
+          @click="theme.toggle()">
           <el-icon :size="14"><Sunny v-if="theme.mode === 'dark'" /><Moon v-else /></el-icon>
         </button>
       </div>

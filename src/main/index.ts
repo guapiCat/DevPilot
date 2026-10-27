@@ -32,8 +32,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
-    }
+      sandbox: true,
+    },
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -63,7 +63,7 @@ function createWindow(): void {
       buttons: ['退出', '取消'],
       defaultId: 1,
       cancelId: 1,
-      noLink: true
+      noLink: true,
     })
 
     if (choice === 0) {
@@ -92,14 +92,11 @@ if (!hasSingleInstanceLock) {
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
 
-    const loadedEnvFiles = loadEnvFiles([
-      join(app.getAppPath(), '.env'),
-      join(app.getPath('userData'), '.env')
-    ])
+    const loadedEnvFiles = loadEnvFiles([join(app.getAppPath(), '.env'), join(app.getPath('userData'), '.env')])
     console.info(`[env] 已加载 ${loadedEnvFiles.length} 个配置文件`)
 
     const modelProfileService = initModelProfileService({
-      cipher: new ElectronSecretCipher()
+      cipher: new ElectronSecretCipher(),
     })
 
     try {

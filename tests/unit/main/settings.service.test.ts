@@ -12,14 +12,14 @@ describe('readAiConfigValues', () => {
       readAiConfigValues({
         DEEPSEEK_API_KEY: '  sk-test-only  ',
         DEEPSEEK_MODEL: ' deepseek-reasoner ',
-        DEEPSEEK_BASE_URL: ' https://example.com/v1 '
-      })
+        DEEPSEEK_BASE_URL: ' https://example.com/v1 ',
+      }),
     ).toEqual({
       provider: 'deepseek',
       apiKey: 'sk-test-only',
       model: 'deepseek-reasoner',
       baseUrl: 'https://example.com/v1',
-      toolsEnabled: true
+      toolsEnabled: true,
     })
 
     expect(readAiConfigValues({ DEEPSEEK_API_KEY: 'sk-test-only' })).toEqual({
@@ -27,7 +27,7 @@ describe('readAiConfigValues', () => {
       apiKey: 'sk-test-only',
       model: 'deepseek-chat',
       baseUrl: 'https://api.deepseek.com',
-      toolsEnabled: true
+      toolsEnabled: true,
     })
   })
 })

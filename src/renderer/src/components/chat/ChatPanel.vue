@@ -14,7 +14,7 @@ const props = withDefaults(
     repositoryId?: string | null
     compact?: boolean
   }>(),
-  { repositoryId: null, compact: false }
+  { repositoryId: null, compact: false },
 )
 
 const chat = useChatStore()
@@ -29,7 +29,7 @@ const {
   canRetry,
   errorMessage,
   aiConfigured,
-  aiConfigLoading
+  aiConfigLoading,
 } = storeToRefs(chat)
 const { totalCount } = storeToRefs(edits)
 
@@ -62,8 +62,7 @@ function handleRetry(): void {
       :messages="activeMessages"
       :generating="isGeneratingInActiveConversation"
       :retryable="canRetry"
-      @retry="handleRetry"
-    />
+      @retry="handleRetry" />
 
     <el-alert
       v-if="!aiConfigLoading && !aiConfigured"
@@ -71,8 +70,7 @@ function handleRetry(): void {
       type="warning"
       title="尚未配置模型服务"
       show-icon
-      :closable="false"
-    >
+      :closable="false">
       <template #default>
         请在
         <router-link class="inline-link" :to="{ name: 'settings' }">设置页</router-link>
@@ -80,23 +78,11 @@ function handleRetry(): void {
       </template>
     </el-alert>
 
-    <el-alert
-      v-if="totalCount > 0"
-      class="panel-alert edit-alert"
-      type="warning"
-      show-icon
-      :closable="false"
-    >
+    <el-alert v-if="totalCount > 0" class="panel-alert edit-alert" type="warning" show-icon :closable="false">
       <template #title>
         <span class="edit-alert-row">
           <span>有 {{ totalCount }} 个文件修改建议待审核</span>
-          <el-button
-            class="review-btn"
-            type="primary"
-            size="small"
-            :icon="DocumentChecked"
-            @click="goReview"
-          >
+          <el-button class="review-btn" type="primary" size="small" :icon="DocumentChecked" @click="goReview">
             去审核
           </el-button>
         </span>
@@ -109,16 +95,14 @@ function handleRetry(): void {
       :title="errorMessage"
       type="error"
       show-icon
-      @close="chat.clearError()"
-    />
+      @close="chat.clearError()" />
 
     <ChatComposer
       :disabled="!aiConfigured"
       disabled-hint="请先在设置页配置模型服务"
       :generating="isGenerating"
       @send="handleSend"
-      @cancel="handleCancel"
-    >
+      @cancel="handleCancel">
       <template #toolbar>
         <ModelSwitcher />
       </template>

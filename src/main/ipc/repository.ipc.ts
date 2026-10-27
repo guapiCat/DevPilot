@@ -11,12 +11,10 @@ export function registerRepositoryIpcHandlers(): void {
     try {
       const options: OpenDialogOptions = {
         title: '选择本地仓库',
-        properties: ['openDirectory']
+        properties: ['openDirectory'],
       }
       const window = BrowserWindow.fromWebContents(event.sender)
-      const result = window
-        ? await dialog.showOpenDialog(window, options)
-        : await dialog.showOpenDialog(options)
+      const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
 
       if (result.canceled || result.filePaths.length === 0) {
         return ipcOk(null)

@@ -15,18 +15,14 @@ interface GitProvider {
 const statusSchema = z.strictObject({})
 
 const diffSchema = z.strictObject({
-  path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH)
+  path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH),
 })
 
 function formatChangePath(status: GitStatus['changes'][number]): string {
-  return status.oldRelativePath
-    ? `${status.oldRelativePath} -> ${status.relativePath}`
-    : status.relativePath
+  return status.oldRelativePath ? `${status.oldRelativePath} -> ${status.relativePath}` : status.relativePath
 }
 
-export function createGitStatusTool(
-  git: GitProvider = gitService
-): ToolDefinition<typeof statusSchema> {
+export function createGitStatusTool(git: GitProvider = gitService): ToolDefinition<typeof statusSchema> {
   return {
     name: 'get_git_status',
     description: '查看当前仓库的 Git 分支与工作区变更列表（文件路径与状态码），不返回文件内容。',
@@ -43,7 +39,7 @@ export function createGitStatusTool(
       const lines = [
         '# Git 状态',
         `分支: ${status.branch ?? '(分离 HEAD 或未命名分支)'}`,
-        `变更: ${status.changes.length} 项${status.truncated ? '（已截断）' : ''}`
+        `变更: ${status.changes.length} 项${status.truncated ? '（已截断）' : ''}`,
       ]
 
       if (status.changes.length === 0) {
@@ -58,19 +54,16 @@ export function createGitStatusTool(
       return {
         content: capped.text,
         summary: `分支 ${status.branch ?? '(未知)'}，${status.changes.length} 项变更`,
-        truncated: capped.truncated || status.truncated
+        truncated: capped.truncated || status.truncated,
       }
-    }
+    },
   }
 }
 
-export function createGitDiffTool(
-  git: GitProvider = gitService
-): ToolDefinition<typeof diffSchema> {
+export function createGitDiffTool(git: GitProvider = gitService): ToolDefinition<typeof diffSchema> {
   return {
     name: 'get_git_diff',
-    description:
-      '查看当前仓库中某个文件相对 HEAD 的未提交差异（含未跟踪文件全文）。敏感文件会被拒绝。',
+    description: '查看当前仓库中某个文件相对 HEAD 的未提交差异（含未跟踪文件全文）。敏感文件会被拒绝。',
     schema: diffSchema,
     summarizeArgs: (args) => toPosixRelative(args.path),
     async execute(args, context) {
@@ -92,17 +85,15 @@ export function createGitDiffTool(
       }
 
       const header = `# Git Diff: ${relativePath}`
-      const body = result.diff.trim()
-        ? result.diff
-        : '该文件当前没有未提交的差异（可能已提交或没有变更）。'
+      const body = result.diff.trim() ? result.diff : '该文件当前没有未提交的差异（可能已提交或没有变更）。'
       const note = result.truncated ? '\n[差异过大，已按 512 KB 截断]' : ''
       const capped = capText(`${header}\n${body}${note}`, MAX_TOOL_OUTPUT_CHARS)
 
       return {
         content: capped.text,
         summary: body.startsWith('该文件') ? '无未提交差异' : `${relativePath} 的未提交差异`,
-        truncated: capped.truncated || result.truncated
+        truncated: capped.truncated || result.truncated,
       }
-    }
+    },
   }
 }

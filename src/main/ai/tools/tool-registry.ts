@@ -24,7 +24,7 @@ export type ToolErrorCode =
 export class ToolExecutionError extends Error {
   constructor(
     readonly code: ToolErrorCode,
-    message: string
+    message: string,
   ) {
     super(message)
     this.name = 'ToolExecutionError'
@@ -97,7 +97,7 @@ export class ToolRegistry {
       modelTool: {
         name: definition.name,
         description: definition.description,
-        parameters
+        parameters,
       },
       summarize: (rawArgs) => {
         const parsed = definition.schema.safeParse(rawArgs)
@@ -109,7 +109,7 @@ export class ToolRegistry {
           throw new ToolExecutionError('INVALID_ARGUMENTS', '工具参数不合法')
         }
         return definition.execute(parsed.data, context)
-      }
+      },
     })
   }
 

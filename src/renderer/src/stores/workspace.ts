@@ -80,13 +80,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     fileSavingPath.value = relativePath
   }
 
-  function applySavedContent(
-    relativePath: string,
-    content: string,
-    hash: string,
-    size: number,
-    hadBom: boolean
-  ): void {
+  function applySavedContent(relativePath: string, content: string, hash: string, size: number, hadBom: boolean): void {
     const existing = fileContents.value[relativePath]
     if (!existing) return
 
@@ -130,6 +124,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setFileLoadingPath,
     setFileSavingPath,
     applySavedContent,
-    resetRepositoryState
+    resetRepositoryState,
   }
 })

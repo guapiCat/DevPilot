@@ -1,8 +1,8 @@
 # DevPilot 数据库表结构
 
-> 适用范围：V1（阶段 1–6 已实现部分 + 多模型档案）
+> 适用范围：V1（阶段 1–8 已实现部分 + 多模型档案）
 > 事实来源：`src/main/database/database.ts` 的迁移定义
-> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013、ADR-016）、[SECURITY.md](SECURITY.md)
+> 相关文档：[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)、[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-011、ADR-012、ADR-013、ADR-016、ADR-018）、[SECURITY.md](SECURITY.md)
 
 ## 1. 数据库位置与连接
 
@@ -14,7 +14,7 @@
   - `busy_timeout = 5000`：遇到锁时最多等待 5 秒。
 - 应用启动时打开并迁移；退出时（`will-quit`）关闭连接。
 - 初始化失败不会阻断启动，只是本次运行不持久化仓库与对话信息（内存模式）。
-- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；阶段 6 起写入 `edit_sessions` 与 `file_edits`，保存 AI 修改提案；多模型档案功能起写入 `model_profiles`（API Key 仅保存 `safeStorage` 密文）。
+- 阶段 4 起写入仓库、会话与消息；阶段 5 起为 assistant 消息写入工具调用摘要；阶段 6 起写入 `edit_sessions` 与 `file_edits`，保存 AI 修改提案；多模型档案功能起写入 `model_profiles`（API Key 仅保存 `safeStorage` 密文）。阶段 8 的源代码管理不新增表：分支、提交历史、单次提交 Diff 与远程同步状态全部通过 Git CLI 按需读取，不持久化。
 
 ## 2. 迁移机制
 
@@ -49,7 +49,7 @@ const MIGRATIONS: readonly Migration[] = [
   (db) => {
     // v3：新增模型档案表（API Key 只保存 safeStorage 密文）
     db.exec('CREATE TABLE model_profiles (...);')
-  }
+  },
 ]
 ```
 
@@ -265,6 +265,7 @@ repositories
 - 时间统一存 ISO 8601 UTC 字符串，排序直接使用字符串比较。
 - ID 统一为 UUID 字符串，由主进程生成。
 - 不保存 API Key 明文、工具输出正文或 Git 命令输出；模型档案的 API Key 只保存 `safeStorage` 密文的 base64。当前保存仓库元数据、会话、消息、工具调用摘要、AI 修改提案中被提议文件的原始/建议内容（用于 Diff 审核与重启恢复），以及模型档案配置。
+- Git 状态、分支、提交历史、提交 Diff 与远程 ahead/behind 均由主进程按需向 Git CLI 查询，不写入数据库；刷新页面或重启后重新读取。
 
 ## 7. 常用查询
 

@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { MAX_EDIT_FILES_PER_SESSION, MAX_FILE_WRITE_BYTES } from '@shared/constants/app'
-import type {
-  ApplyFileEditResult,
-  EditSession,
-  FileEdit,
-  FileEditOperation,
-  FileEditStatus
-} from '@shared/types/edit'
+import type { ApplyFileEditResult, EditSession, FileEdit, FileEditOperation, FileEditStatus } from '@shared/types/edit'
 import type { FileContent, FileWriteResult } from '@shared/types/repository'
 import type { EditStore, FileEditRow } from '../database/edit.store'
 import { isSensitivePath } from '../ai/tools/sensitive'
@@ -55,7 +49,7 @@ function toFileEditView(row: RowsToView): FileEdit {
     originalContent: row.original_content,
     proposedContent: row.proposed_content,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }
 }
 
@@ -89,7 +83,7 @@ export class EditService {
   constructor(
     private readonly repositories: RepositoryService = repositoryService,
     private readonly files: FileService = fileService,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   initialize(store: EditStore | null): void {
@@ -124,21 +118,14 @@ export class EditService {
 
       const occurrences = countOccurrences(file.content, oldText)
       if (occurrences === 0) {
-        throw new ServiceError(
-          'EDIT_CONFLICT',
-          'oldText 在文件中未找到，请先读取文件并提供完全一致的片段'
-        )
+        throw new ServiceError('EDIT_CONFLICT', 'oldText 在文件中未找到，请先读取文件并提供完全一致的片段')
       }
       if (occurrences > 1) {
-        throw new ServiceError(
-          'EDIT_CONFLICT',
-          `oldText 在文件中出现 ${occurrences} 次，请提供更长且唯一的片段`
-        )
+        throw new ServiceError('EDIT_CONFLICT', `oldText 在文件中出现 ${occurrences} 次，请提供更长且唯一的片段`)
       }
 
       const start = file.content.indexOf(oldText)
-      proposedContent =
-        file.content.slice(0, start) + newText + file.content.slice(start + oldText.length)
+      proposedContent = file.content.slice(0, start) + newText + file.content.slice(start + oldText.length)
       if (proposedContent === file.content) {
         throw new ServiceError('EDIT_CONFLICT', '建议内容与当前文件相同')
       }
@@ -163,18 +150,12 @@ export class EditService {
 
     const sessionId = this.resolveSession(input)
     if (store.countFileEdits(sessionId) >= MAX_EDIT_FILES_PER_SESSION) {
-      throw new ServiceError(
-        'EDIT_CONFLICT',
-        `本次修改建议已达到 ${MAX_EDIT_FILES_PER_SESSION} 个文件上限`
-      )
+      throw new ServiceError('EDIT_CONFLICT', `本次修改建议已达到 ${MAX_EDIT_FILES_PER_SESSION} 个文件上限`)
     }
 
     const duplicate = store.findActiveFileEditByPath(sessionId, relativePath)
     if (duplicate) {
-      throw new ServiceError(
-        'EDIT_CONFLICT',
-        '该文件已有待审核的修改建议，请在同一个 oldText/newText 中合并所有改动'
-      )
+      throw new ServiceError('EDIT_CONFLICT', '该文件已有待审核的修改建议，请在同一个 oldText/newText 中合并所有改动')
     }
 
     const timestamp = this.now().toISOString()
@@ -187,7 +168,7 @@ export class EditService {
       originalContent,
       proposedContent,
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
     }
 
     store.insertFileEdit({
@@ -200,7 +181,7 @@ export class EditService {
       originalHash,
       status: 'proposed',
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
     })
     store.touchSession(sessionId, timestamp)
 
@@ -225,7 +206,7 @@ export class EditService {
       status: session.status as EditSession['status'],
       createdAt: session.created_at,
       updatedAt: session.updated_at,
-      files: store.listFileEdits(session.id).map(toFileEditView)
+      files: store.listFileEdits(session.id).map(toFileEditView),
     }
   }
 
@@ -237,24 +218,12 @@ export class EditService {
     try {
       write =
         file.operation === 'create'
-          ? await this.files.writeNew(
-              session.repository_id,
-              file.relative_path,
-              file.proposed_content
-            )
-          : await this.files.write(
-              session.repository_id,
-              file.relative_path,
-              file.proposed_content,
-              file.original_hash
-            )
+          ? await this.files.writeNew(session.repository_id, file.relative_path, file.proposed_content)
+          : await this.files.write(session.repository_id, file.relative_path, file.proposed_content, file.original_hash)
     } catch (error) {
       if (this.isStaleError(error)) {
         this.markFileStatus(editSessionId, fileEditId, 'stale')
-        throw new ServiceError(
-          'FILE_CHANGED',
-          '文件已在磁盘上被外部修改，建议已标记为过期，请重新生成'
-        )
+        throw new ServiceError('FILE_CHANGED', '文件已在磁盘上被外部修改，建议已标记为过期，请重新生成')
       }
       this.markFileStatus(editSessionId, fileEditId, 'failed')
       throw error
@@ -268,7 +237,7 @@ export class EditService {
       file: { ...toFileEditView(file), status: 'applied', updatedAt },
       hash: write.hash,
       size: write.size,
-      hadBom: write.hadBom
+      hadBom: write.hadBom,
     }
   }
 
@@ -297,7 +266,7 @@ export class EditService {
       repositoryId: input.repositoryId,
       status: 'active',
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
     })
 
     this.sessionsByRun.set(key, id)
@@ -311,7 +280,7 @@ export class EditService {
 
   private requirePendingFile(
     editSessionId: string,
-    fileEditId: string
+    fileEditId: string,
   ): { session: NonNullable<ReturnType<EditStore['findSession']>>; file: FileEditRow } {
     const store = this.requireStore()
     const session = store.findSession(editSessionId)
@@ -346,10 +315,7 @@ export class EditService {
   }
 
   private isStaleError(error: unknown): boolean {
-    return (
-      error instanceof ServiceError &&
-      (error.code === 'FILE_CHANGED' || error.code === 'FILE_ALREADY_EXISTS')
-    )
+    return error instanceof ServiceError && (error.code === 'FILE_CHANGED' || error.code === 'FILE_ALREADY_EXISTS')
   }
 
   private mapFileError(error: unknown): ServiceError {

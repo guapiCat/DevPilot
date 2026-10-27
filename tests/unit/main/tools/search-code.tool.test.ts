@@ -4,11 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  MAX_SEARCH_FILES,
-  MAX_SEARCH_MATCHES,
-  MAX_SEARCH_MATCHES_PER_FILE
-} from '@shared/constants/app'
+import { MAX_SEARCH_FILES, MAX_SEARCH_MATCHES, MAX_SEARCH_MATCHES_PER_FILE } from '@shared/constants/app'
 import { resolveRgCommand } from '@main/ai/tools/rg-path'
 import { buildSearchArgs, createSearchCodeTool, parseRgJson } from '@main/ai/tools/search-code.tool'
 import type { ToolContext } from '@main/ai/tools/tool-registry'
@@ -21,8 +17,8 @@ function matchEvent(path: string, lineNumber: number, text: string): string {
     data: {
       path: { text: path },
       lines: { text },
-      line_number: lineNumber
-    }
+      line_number: lineNumber,
+    },
   })
 }
 
@@ -71,9 +67,7 @@ describe('resolveRgCommand', () => {
   })
 
   it('覆盖路径无效时回退', () => {
-    expect(resolveRgCommand('C:/definitely-not-here/rg.exe')).not.toBe(
-      'C:/definitely-not-here/rg.exe'
-    )
+    expect(resolveRgCommand('C:/definitely-not-here/rg.exe')).not.toBe('C:/definitely-not-here/rg.exe')
   })
 })
 
@@ -83,7 +77,7 @@ describe('parseRgJson', () => {
       JSON.stringify({ type: 'begin', data: { path: { text: 'src/a.ts' } } }),
       matchEvent('src\\nested\\a.ts', 12, 'const a = 1\n'),
       JSON.stringify({ type: 'end', data: { path: { text: 'src/a.ts' } } }),
-      JSON.stringify({ type: 'summary', data: {} })
+      JSON.stringify({ type: 'summary', data: {} }),
     ].join('\n')
 
     const result = parseRgJson(stdout)
@@ -98,7 +92,7 @@ describe('parseRgJson', () => {
       'not json',
       matchEvent('.env', 1, 'SECRET=1\n'),
       matchEvent('src/.aws/credentials', 1, 'key\n'),
-      matchEvent('src/ok.ts', 3, 'fine\n')
+      matchEvent('src/ok.ts', 3, 'fine\n'),
     ].join('\n')
 
     const result = parseRgJson(stdout)
@@ -109,7 +103,7 @@ describe('parseRgJson', () => {
 
   it('每个文件最多保留 10 条匹配', () => {
     const stdout = Array.from({ length: MAX_SEARCH_MATCHES_PER_FILE + 3 }, (_, index) =>
-      matchEvent('src/a.ts', index + 1, `line ${index + 1}\n`)
+      matchEvent('src/a.ts', index + 1, `line ${index + 1}\n`),
     ).join('\n')
 
     const result = parseRgJson(stdout)
@@ -120,14 +114,14 @@ describe('parseRgJson', () => {
 
   it('最多保留 40 个文件与 200 条匹配', () => {
     const manyFiles = Array.from({ length: MAX_SEARCH_FILES + 2 }, (_, index) =>
-      matchEvent(`src/f${index}.ts`, 1, 'hit\n')
+      matchEvent(`src/f${index}.ts`, 1, 'hit\n'),
     ).join('\n')
     expect(parseRgJson(manyFiles).fileCount).toBe(MAX_SEARCH_FILES)
 
     const manyMatches = Array.from({ length: 45 }, (_, fileIndex) =>
-      Array.from({ length: 10 }, (_, lineIndex) =>
-        matchEvent(`src/f${fileIndex}.ts`, lineIndex + 1, 'hit\n')
-      ).join('\n')
+      Array.from({ length: 10 }, (_, lineIndex) => matchEvent(`src/f${fileIndex}.ts`, lineIndex + 1, 'hit\n')).join(
+        '\n',
+      ),
     ).join('\n')
     const result = parseRgJson(manyMatches)
     expect(result.matches).toHaveLength(MAX_SEARCH_MATCHES)
@@ -232,7 +226,7 @@ describe.skipIf(!rgAvailable)('search_code 工具（真实 ripgrep）', () => {
 
   it('拒绝越界搜索路径', async () => {
     await expect(tool.execute({ query: 'TODO', path: '../' }, context)).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
   })
 })
@@ -241,7 +235,7 @@ describe.skipIf(rgAvailable)('search_code 缺少 ripgrep', () => {
   it('返回 RG_NOT_AVAILABLE', async () => {
     const tool = createSearchCodeTool({ getRealRoot: () => process.cwd() })
     await expect(
-      tool.execute({ query: 'x' }, { repositoryId: 'r', signal: new AbortController().signal })
+      tool.execute({ query: 'x' }, { repositoryId: 'r', signal: new AbortController().signal }),
     ).rejects.toMatchObject({ code: 'RG_NOT_AVAILABLE' })
   })
 
@@ -249,10 +243,7 @@ describe.skipIf(rgAvailable)('search_code 缺少 ripgrep', () => {
     const tool = createSearchCodeTool({ getRealRoot: () => process.cwd() })
     for (const path of ['.', './', '/']) {
       await expect(
-        tool.execute(
-          { query: 'x', path },
-          { repositoryId: 'r', signal: new AbortController().signal }
-        )
+        tool.execute({ query: 'x', path }, { repositoryId: 'r', signal: new AbortController().signal }),
       ).rejects.toMatchObject({ code: 'RG_NOT_AVAILABLE' })
     }
   })

@@ -16,7 +16,7 @@ const SENSITIVE_FILE_PATTERNS: readonly RegExp[] = [
   /^kubeconfig$/i,
   /^id_(rsa|dsa|ecdsa|ed25519)$/i,
   /^service-account.*\.json$/i,
-  /^firebase-adminsdk.*\.json$/i
+  /^firebase-adminsdk.*\.json$/i,
 ]
 
 const SENSITIVE_EXTENSIONS = new Set([
@@ -32,17 +32,10 @@ const SENSITIVE_EXTENSIONS = new Set([
   '.kdbx',
   '.ppk',
   '.gpg',
-  '.asc'
+  '.asc',
 ])
 
-const SENSITIVE_DIRECTORY_SEGMENTS = new Set([
-  '.ssh',
-  '.aws',
-  '.gnupg',
-  '.azure',
-  '.kube',
-  '.docker'
-])
+const SENSITIVE_DIRECTORY_SEGMENTS = new Set(['.ssh', '.aws', '.gnupg', '.azure', '.kube', '.docker'])
 
 const SECRET_PATTERNS: readonly RegExp[] = [
   /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/,
@@ -50,7 +43,7 @@ const SECRET_PATTERNS: readonly RegExp[] = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/,
-  /\bAIza[0-9A-Za-z_-]{30,}\b/
+  /\bAIza[0-9A-Za-z_-]{30,}\b/,
 ]
 
 const REDACTED = '[疑似敏感信息已屏蔽]'
@@ -76,8 +69,5 @@ export function containsHighRiskSecret(text: string): boolean {
 }
 
 export function redactSecretSnippet(line: string): string {
-  return SECRET_PATTERNS.reduce(
-    (result, pattern) => result.replace(new RegExp(pattern.source, 'g'), REDACTED),
-    line
-  )
+  return SECRET_PATTERNS.reduce((result, pattern) => result.replace(new RegExp(pattern.source, 'g'), REDACTED), line)
 }

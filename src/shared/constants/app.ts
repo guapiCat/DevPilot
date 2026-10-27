@@ -28,9 +28,19 @@ export const MAX_RELATIVE_PATH_LENGTH = 4096
 export const BINARY_SNIFF_BYTES = 8000
 
 export const GIT_COMMAND_TIMEOUT_MS = 10_000
+export const GIT_WRITE_COMMAND_TIMEOUT_MS = 30_000
+export const GIT_NETWORK_COMMAND_TIMEOUT_MS = 60_000
 export const MAX_GIT_OUTPUT_BYTES = 5 * 1024 * 1024
 export const MAX_GIT_DIFF_BYTES = 512 * 1024
 export const MAX_GIT_STATUS_ENTRIES = 2000
+export const MAX_GIT_STAGE_PATHS = 500
+export const MAX_GIT_PATHSPEC_CHARS = 20_000
+export const MAX_GIT_COMMIT_MESSAGE_LENGTH = 2000
+export const MAX_GIT_COMMIT_BODY_LENGTH = 4000
+export const MAX_GIT_BRANCH_NAME_LENGTH = 120
+export const MAX_GIT_BRANCHES = 500
+export const MAX_GIT_LOG_ENTRIES = 200
+export const DEFAULT_GIT_LOG_LIMIT = 50
 
 export const MAX_TOOL_ROUNDS = 5
 export const MAX_TOOL_CALLS_PER_RUN = 12
@@ -64,7 +74,7 @@ export const IGNORED_DIRECTORY_NAMES = ['.git', 'node_modules'] as const
 export const AI_CONFIG_ENV = {
   apiKey: 'DEEPSEEK_API_KEY',
   model: 'DEEPSEEK_MODEL',
-  baseUrl: 'DEEPSEEK_BASE_URL'
+  baseUrl: 'DEEPSEEK_BASE_URL',
 } as const
 
 export const IPC_CHANNELS = {
@@ -84,6 +94,18 @@ export const IPC_CHANNELS = {
   fileWrite: 'file:write',
   gitStatus: 'git:status',
   gitDiff: 'git:diff',
+  gitListBranches: 'git:list-branches',
+  gitStage: 'git:stage',
+  gitUnstage: 'git:unstage',
+  gitCommit: 'git:commit',
+  gitCreateBranch: 'git:create-branch',
+  gitSwitchBranch: 'git:switch-branch',
+  gitLog: 'git:log',
+  gitCommitDetail: 'git:commit-detail',
+  gitRemoteStatus: 'git:remote-status',
+  gitFetch: 'git:fetch',
+  gitPull: 'git:pull',
+  gitPush: 'git:push',
   chatListConversations: 'chat:list-conversations',
   chatCreateConversation: 'chat:create-conversation',
   chatDeleteConversation: 'chat:delete-conversation',
@@ -94,5 +116,5 @@ export const IPC_CHANNELS = {
   chatEvent: 'chat:event',
   editListPending: 'edit:list-pending',
   editApplyFile: 'edit:apply-file',
-  editRejectFile: 'edit:reject-file'
+  editRejectFile: 'edit:reject-file',
 } as const

@@ -7,7 +7,7 @@ import {
   MAX_RELATIVE_PATH_LENGTH,
   MAX_TOOL_LIST_DEPTH,
   MAX_TOOL_LIST_ENTRIES,
-  MAX_TOOL_OUTPUT_CHARS
+  MAX_TOOL_OUTPUT_CHARS,
 } from '@shared/constants/app'
 import { isSafeRelativePath } from '@shared/utils/path'
 import { repositoryService } from '@main/services/repository.service'
@@ -33,20 +33,17 @@ const SKIPPED_DIRECTORIES = new Set<string>([
   '.cache',
   '.turbo',
   'target',
-  '__pycache__'
+  '__pycache__',
 ])
 
 const schema = z.strictObject({
   path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH).optional(),
-  depth: z.number().int().min(1).max(MAX_TOOL_LIST_DEPTH).optional()
+  depth: z.number().int().min(1).max(MAX_TOOL_LIST_DEPTH).optional(),
 })
 
 async function resolveDirectory(root: string, relativePath: string | undefined): Promise<string> {
   if (relativePath !== undefined && !isSafeRelativePath(relativePath)) {
-    throw new ToolExecutionError(
-      'PATH_NOT_ALLOWED',
-      '目录路径必须是仓库内的相对路径；查看根目录请省略 path 参数'
-    )
+    throw new ToolExecutionError('PATH_NOT_ALLOWED', '目录路径必须是仓库内的相对路径；查看根目录请省略 path 参数')
   }
 
   const candidate = relativePath ? resolve(root, ...relativePath.split(/[\\/]+/)) : root
@@ -81,7 +78,7 @@ async function walk(
   level: number,
   maxDepth: number,
   state: WalkState,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<void> {
   if (level > maxDepth) return
 
@@ -128,9 +125,7 @@ async function walk(
   }
 }
 
-export function createListFilesTool(
-  repositories: RootProvider = repositoryService
-): ToolDefinition<typeof schema> {
+export function createListFilesTool(repositories: RootProvider = repositoryService): ToolDefinition<typeof schema> {
   return {
     name: 'list_files',
     description:
@@ -138,9 +133,7 @@ export function createListFilesTool(
     schema,
     summarizeArgs: (args) => {
       const path = normalizeToolPath(args.path)
-      return path
-        ? `列出 ${path}（深度 ${args.depth ?? 2}）`
-        : `列出仓库根目录（深度 ${args.depth ?? 2}）`
+      return path ? `列出 ${path}（深度 ${args.depth ?? 2}）` : `列出仓库根目录（深度 ${args.depth ?? 2}）`
     },
     async execute(args, context) {
       const root = repositories.getRealRoot(context.repositoryId)
@@ -163,8 +156,8 @@ export function createListFilesTool(
       return {
         content: capped.text,
         summary: `列出 ${state.count} 项${state.truncated ? '（已截断）' : ''}`,
-        truncated: capped.truncated || state.truncated
+        truncated: capped.truncated || state.truncated,
       }
-    }
+    },
   }
 }

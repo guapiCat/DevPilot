@@ -5,7 +5,7 @@ import {
   stableStringify,
   stripToolCallMarkup,
   type AgentRunInput,
-  type AgentRunResult
+  type AgentRunResult,
 } from '@main/ai/agent-runner'
 import type { ModelAdapter, ModelStreamRequest, ModelToolCall } from '@main/ai/model-adapter'
 import type { ToolCallRecord } from '@shared/types/tool'
@@ -39,8 +39,8 @@ function scriptAdapter(rounds: ScriptedRound[]): {
           }
           if (round.usage) yield { type: 'usage' as const, ...round.usage }
         })()
-      }
-    }
+      },
+    },
   }
 }
 
@@ -55,13 +55,11 @@ function createTools(options: { longOutput?: boolean } = {}): TestTools {
   const registry = new ToolRegistry()
 
   const echo = vi.fn(
-    async (args: {
-      value: string
-    }): Promise<{ content: string; summary: string; truncated: boolean }> => ({
+    async (args: { value: string }): Promise<{ content: string; summary: string; truncated: boolean }> => ({
       content: options.longOutput ? 'x'.repeat(500) : `value=${args.value}`,
       summary: `echo ${args.value}`,
-      truncated: false
-    })
+      truncated: false,
+    }),
   )
 
   const sensitive = vi.fn(async (): Promise<never> => {
@@ -73,7 +71,7 @@ function createTools(options: { longOutput?: boolean } = {}): TestTools {
       new Promise((_, reject) => {
         if (context.signal.aborted) reject(new Error('aborted'))
         context.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-      })
+      }),
   )
 
   registry.register({
@@ -81,21 +79,21 @@ function createTools(options: { longOutput?: boolean } = {}): TestTools {
     description: 'echo',
     schema: z.strictObject({ value: z.string() }),
     summarizeArgs: (args) => `echo ${args.value}`,
-    execute: echo
+    execute: echo,
   })
   registry.register({
     name: 'sensitive',
     description: 'sensitive',
     schema: z.strictObject({ path: z.string() }),
     summarizeArgs: (args) => args.path,
-    execute: sensitive
+    execute: sensitive,
   })
   registry.register({
     name: 'slow',
     description: 'slow',
     schema: z.strictObject({}),
     summarizeArgs: () => 'slow',
-    execute: slow
+    execute: slow,
   })
 
   return { registry, echo, sensitive, slow }
@@ -106,7 +104,7 @@ function createCallbacks(): AgentRunInput['callbacks'] {
     onTextDelta: vi.fn(),
     onToolStarted: vi.fn(),
     onToolFinished: vi.fn(),
-    onUsage: vi.fn()
+    onUsage: vi.fn(),
   }
 }
 
@@ -114,7 +112,7 @@ async function run(
   adapter: ModelAdapter,
   registry: ToolRegistry | null,
   callbacks: AgentRunInput['callbacks'],
-  overrides: Partial<AgentRunInput> = {}
+  overrides: Partial<AgentRunInput> = {},
 ): Promise<AgentRunResult> {
   return runAgent({
     adapter,
@@ -123,7 +121,7 @@ async function run(
     messages: [{ role: 'user', content: 'hi' }],
     signal: new AbortController().signal,
     callbacks,
-    ...overrides
+    ...overrides,
   })
 }
 
@@ -147,7 +145,7 @@ describe('stripToolCallMarkup', () => {
       '<｜｜DSML｜｜ invoke name="read_file">',
       '<｜｜DSML｜｜ parameter name="path" string="true">backend/src/index.ts</｜｜DSML｜｜ parameter>',
       '</｜｜DSML｜｜ invoke>',
-      '</｜｜DSML｜｜ calls>'
+      '</｜｜DSML｜｜ calls>',
     ].join('\n')
 
     expect(stripToolCallMarkup(raw)).toBe('结论如下。')
@@ -177,7 +175,7 @@ describe('runAgent', () => {
     const tools = createTools()
     const { adapter, requests } = scriptAdapter([
       { text: '先读取', toolCalls: [toolCall('call_1', 'a')] },
-      { text: '最终回答' }
+      { text: '最终回答' },
     ])
     const callbacks = createCallbacks()
 
@@ -191,14 +189,14 @@ describe('runAgent', () => {
         name: 'echo',
         argumentsSummary: 'echo a',
         status: 'success',
-        summary: 'echo a'
-      })
+        summary: 'echo a',
+      }),
     ])
     expect(tools.echo).toHaveBeenCalledWith({ value: 'a' }, expect.anything())
     expect(callbacks.onToolStarted).toHaveBeenCalledWith({
       id: 'call_1',
       name: 'echo',
-      argsSummary: 'echo a'
+      argsSummary: 'echo a',
     })
     expect(callbacks.onToolFinished).toHaveBeenCalledTimes(1)
 
@@ -207,12 +205,12 @@ describe('runAgent', () => {
     expect(second.at(-2)).toMatchObject({
       role: 'assistant',
       content: '先读取',
-      toolCalls: [toolCall('call_1', 'a')]
+      toolCalls: [toolCall('call_1', 'a')],
     })
     expect(second.at(-1)).toMatchObject({
       role: 'tool',
       toolCallId: 'call_1',
-      toolName: 'echo'
+      toolName: 'echo',
     })
     expect((second.at(-1) as { content: string }).content).toContain('value=a')
     expect(requests[1].tools).toHaveLength(3)
@@ -223,11 +221,11 @@ describe('runAgent', () => {
     const { adapter, requests } = scriptAdapter([
       { toolCalls: [toolCall('c1', '1')] },
       { toolCalls: [toolCall('c2', '2')] },
-      { text: '' }
+      { text: '' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxRounds: 2 }
+      limits: { maxRounds: 2 },
     })
 
     expect(result.roundLimitReached).toBe(true)
@@ -244,16 +242,16 @@ describe('runAgent', () => {
       '<｜｜DSML｜｜ invoke name="read_file">',
       '<｜｜DSML｜｜ parameter name="path" string="true">backend/src/index.ts</｜｜DSML｜｜ parameter>',
       '</｜｜DSML｜｜ invoke>',
-      '</｜｜DSML｜｜ calls>'
+      '</｜｜DSML｜｜ calls>',
     ].join('\n')
     const { adapter, requests } = scriptAdapter([
       { toolCalls: [toolCall('c1', '1')] },
       { toolCalls: [toolCall('c2', '2')] },
-      { text: `已读取部分文件。\n\n${dsml}` }
+      { text: `已读取部分文件。\n\n${dsml}` },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxRounds: 2 }
+      limits: { maxRounds: 2 },
     })
 
     expect(result.text).toBe('已读取部分文件。')
@@ -268,11 +266,11 @@ describe('runAgent', () => {
     const { adapter } = scriptAdapter([
       { toolCalls: [toolCall('c1', '1')] },
       { toolCalls: [toolCall('c2', '2')] },
-      { text: '汇总完成' }
+      { text: '汇总完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxRounds: 2 }
+      limits: { maxRounds: 2 },
     })
 
     expect(result.answerText).toBe('汇总完成')
@@ -284,21 +282,17 @@ describe('runAgent', () => {
     const tools = createTools()
     const { adapter } = scriptAdapter([
       {
-        toolCalls: [toolCall('c1', '1'), toolCall('c2', '2'), toolCall('c3', '3')]
+        toolCalls: [toolCall('c1', '1'), toolCall('c2', '2'), toolCall('c3', '3')],
       },
-      { text: '完成' }
+      { text: '完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxCallsPerRound: 2 }
+      limits: { maxCallsPerRound: 2 },
     })
 
     expect(tools.echo).toHaveBeenCalledTimes(2)
-    expect(result.toolCalls.map((item: ToolCallRecord) => item.status)).toEqual([
-      'success',
-      'success',
-      'blocked'
-    ])
+    expect(result.toolCalls.map((item: ToolCallRecord) => item.status)).toEqual(['success', 'success', 'blocked'])
     expect(result.toolCalls[2].summary).toContain('上限')
   })
 
@@ -306,7 +300,7 @@ describe('runAgent', () => {
     const tools = createTools()
     const { adapter } = scriptAdapter([
       { toolCalls: [toolCall('c1', 'same'), toolCall('c2', 'same')] },
-      { text: '完成' }
+      { text: '完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks())
@@ -321,11 +315,11 @@ describe('runAgent', () => {
     const { adapter, requests } = scriptAdapter([
       { toolCalls: [toolCall('c1', '1'), toolCall('c2', '2')] },
       { toolCalls: [toolCall('c3', '3')] },
-      { text: '完成' }
+      { text: '完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxToolCalls: 2, maxRounds: 5 }
+      limits: { maxToolCalls: 2, maxRounds: 5 },
     })
 
     expect(tools.echo).toHaveBeenCalledTimes(2)
@@ -339,10 +333,10 @@ describe('runAgent', () => {
       {
         toolCalls: [
           { id: 's1', name: 'sensitive', arguments: { path: '.env' } },
-          { id: 'u1', name: 'unknown_tool', arguments: {} }
-        ]
+          { id: 'u1', name: 'unknown_tool', arguments: {} },
+        ],
       },
-      { text: '继续' }
+      { text: '继续' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks())
@@ -356,11 +350,11 @@ describe('runAgent', () => {
     const tools = createTools()
     const { adapter } = scriptAdapter([
       { toolCalls: [{ id: 'slow1', name: 'slow', arguments: {} }] },
-      { text: '超时后继续' }
+      { text: '超时后继续' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { toolTimeoutMs: 20 }
+      limits: { toolTimeoutMs: 20 },
     })
 
     expect(result.toolCalls[0]).toMatchObject({ status: 'timeout', summary: '执行超时' })
@@ -374,12 +368,12 @@ describe('runAgent', () => {
     callbacks.onToolStarted = vi.fn(() => controller.abort())
     const { adapter, requests } = scriptAdapter([
       { toolCalls: [{ id: 'slow1', name: 'slow', arguments: {} }] },
-      { text: '不应到达' }
+      { text: '不应到达' },
     ])
 
     const result = await run(adapter, tools.registry, callbacks, {
       signal: controller.signal,
-      limits: { toolTimeoutMs: 5_000 }
+      limits: { toolTimeoutMs: 5_000 },
     })
 
     expect(result.stopped).toBe(true)
@@ -393,14 +387,14 @@ describe('runAgent', () => {
       {
         toolCalls: [
           { id: 'e1', name: 'echo', arguments: { value: '1' } },
-          { id: 'e2', name: 'echo', arguments: { value: '2' } }
-        ]
+          { id: 'e2', name: 'echo', arguments: { value: '2' } },
+        ],
       },
-      { text: '完成' }
+      { text: '完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxToolOutputChars: 100, maxTotalToolOutputChars: 90 }
+      limits: { maxToolOutputChars: 100, maxTotalToolOutputChars: 90 },
     })
 
     const secondRound = requests[1].messages
@@ -417,14 +411,14 @@ describe('runAgent', () => {
         toolCalls: [
           { id: 'b1', name: 'echo', arguments: { value: '1' } },
           { id: 'b2', name: 'echo', arguments: { value: '2' } },
-          { id: 'b3', name: 'echo', arguments: { value: '3' } }
-        ]
+          { id: 'b3', name: 'echo', arguments: { value: '3' } },
+        ],
       },
-      { text: '完成' }
+      { text: '完成' },
     ])
 
     const result = await run(adapter, tools.registry, createCallbacks(), {
-      limits: { maxToolOutputChars: 100, maxTotalToolOutputChars: 100 }
+      limits: { maxToolOutputChars: 100, maxTotalToolOutputChars: 100 },
     })
 
     expect(tools.echo).toHaveBeenCalledTimes(1)
@@ -440,9 +434,9 @@ describe('runAgent', () => {
     const { adapter } = scriptAdapter([
       {
         toolCalls: [toolCall('c1', '1')],
-        usage: { inputTokens: 10, outputTokens: 5 }
+        usage: { inputTokens: 10, outputTokens: 5 },
       },
-      { text: '完成', usage: { inputTokens: 20, outputTokens: 8 } }
+      { text: '完成', usage: { inputTokens: 20, outputTokens: 8 } },
     ])
     const callbacks = createCallbacks()
 

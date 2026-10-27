@@ -72,8 +72,9 @@ export const useRepositoryStore = defineStore('repository', () => {
       gitStatus.value = {
         repositoryId: summary.id,
         branch: null,
+        headState: 'unborn',
         changes: [],
-        truncated: false
+        truncated: false,
       }
       gitStatusError.value = null
       gitStatusLoading.value = false
@@ -94,9 +95,7 @@ export const useRepositoryStore = defineStore('repository', () => {
       gitStatus.value = status
 
       if (selectedGitPath.value) {
-        const stillChanged = status.changes.some(
-          (change) => change.relativePath === selectedGitPath.value
-        )
+        const stillChanged = status.changes.some((change) => change.relativePath === selectedGitPath.value)
         if (stillChanged) {
           void refreshGitDiff(selectedGitPath.value)
         } else {
@@ -171,6 +170,6 @@ export const useRepositoryStore = defineStore('repository', () => {
     refreshGitStatus,
     refreshGitDiff,
     selectGitChange,
-    resetGitState
+    resetGitState,
   }
 })

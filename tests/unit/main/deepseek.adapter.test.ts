@@ -16,7 +16,7 @@ vi.mock('@langchain/deepseek', () => ({
     stream(...args: unknown[]): unknown {
       return streamMock(...args)
     }
-  }
+  },
 }))
 
 const { DeepSeekAdapter, normalizeContent } = await import('@main/ai/deepseek.adapter')
@@ -36,8 +36,8 @@ describe('normalizeContent', () => {
       normalizeContent([
         { type: 'text', text: '你' },
         { type: 'image_url', image_url: { url: 'https://example.com/x.png' } },
-        { type: 'text', text: '好' }
-      ])
+        { type: 'text', text: '好' },
+      ]),
     ).toBe('你好')
   })
 
@@ -79,7 +79,7 @@ describe('DeepSeekAdapter', () => {
     return new DeepSeekAdapter({
       apiKey: 'sk-test-only',
       model: 'deepseek-chat',
-      baseUrl: 'https://api.deepseek.com'
+      baseUrl: 'https://api.deepseek.com',
     })
   }
 
@@ -88,14 +88,14 @@ describe('DeepSeekAdapter', () => {
       yield { content: '你', usage_metadata: undefined }
       yield {
         content: '好',
-        usage_metadata: { input_tokens: 12, output_tokens: 3, total_tokens: 15 }
+        usage_metadata: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
       }
     })
 
     const events: ModelEvent[] = []
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       events.push(event)
     }
@@ -103,7 +103,7 @@ describe('DeepSeekAdapter', () => {
     expect(events).toEqual([
       { type: 'text_delta', text: '你' },
       { type: 'text_delta', text: '好' },
-      { type: 'usage', inputTokens: 12, outputTokens: 3 }
+      { type: 'usage', inputTokens: 12, outputTokens: 3 },
     ])
   })
 
@@ -118,7 +118,7 @@ describe('DeepSeekAdapter', () => {
     const events: ModelEvent[] = []
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: controller.signal
+      signal: controller.signal,
     })) {
       events.push(event)
     }
@@ -138,9 +138,9 @@ describe('DeepSeekAdapter', () => {
         {
           name: 'read_file',
           description: '读取文件',
-          parameters: { type: 'object', properties: { path: { type: 'string' } } }
-        }
-      ]
+          parameters: { type: 'object', properties: { path: { type: 'string' } } },
+        },
+      ],
     })) {
       void event
     }
@@ -151,9 +151,9 @@ describe('DeepSeekAdapter', () => {
         function: {
           name: 'read_file',
           description: '读取文件',
-          parameters: { type: 'object', properties: { path: { type: 'string' } } }
-        }
-      }
+          parameters: { type: 'object', properties: { path: { type: 'string' } } },
+        },
+      },
     ])
   })
 
@@ -161,14 +161,12 @@ describe('DeepSeekAdapter', () => {
     streamMock.mockImplementation(async function* () {
       yield {
         content: '',
-        tool_call_chunks: [{ index: 0, id: 'call_1', name: 'read_file', args: '{"pa' }]
+        tool_call_chunks: [{ index: 0, id: 'call_1', name: 'read_file', args: '{"pa' }],
       }
       yield { content: '', tool_call_chunks: [{ index: 0, args: 'th":"src/a.ts"}' }] }
       yield {
         content: '',
-        tool_call_chunks: [
-          { index: 1, id: 'call_2', name: 'search_code', args: '{"query":"TODO"}' }
-        ]
+        tool_call_chunks: [{ index: 1, id: 'call_2', name: 'search_code', args: '{"query":"TODO"}' }],
       }
     })
 
@@ -176,14 +174,14 @@ describe('DeepSeekAdapter', () => {
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
       signal: new AbortController().signal,
-      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }]
+      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }],
     })) {
       events.push(event)
     }
 
     expect(events).toEqual([
       { type: 'tool_call', id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } },
-      { type: 'tool_call', id: 'call_2', name: 'search_code', arguments: { query: 'TODO' } }
+      { type: 'tool_call', id: 'call_2', name: 'search_code', arguments: { query: 'TODO' } },
     ])
   })
 
@@ -196,7 +194,7 @@ describe('DeepSeekAdapter', () => {
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
       signal: new AbortController().signal,
-      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }]
+      tools: [{ name: 'read_file', description: 'd', parameters: { type: 'object' } }],
     })) {
       events.push(event)
     }
@@ -220,16 +218,16 @@ describe('DeepSeekAdapter', () => {
         {
           role: 'assistant',
           content: '',
-          toolCalls: [{ id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } }]
+          toolCalls: [{ id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } }],
         },
         {
           role: 'tool',
           content: '<tool_result>ok</tool_result>',
           toolCallId: 'call_1',
-          toolName: 'read_file'
-        }
+          toolName: 'read_file',
+        },
       ],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       void event
     }
@@ -237,7 +235,7 @@ describe('DeepSeekAdapter', () => {
     const messages = streamMock.mock.calls[0][0] as unknown[]
     expect(messages[0]).toBeInstanceOf(AIMessage)
     expect((messages[0] as AIMessage).tool_calls).toEqual([
-      { id: 'call_1', name: 'read_file', args: { path: 'src/a.ts' }, type: 'tool_call' }
+      { id: 'call_1', name: 'read_file', args: { path: 'src/a.ts' }, type: 'tool_call' },
     ])
     expect(messages[1]).toBeInstanceOf(ToolMessage)
     expect((messages[1] as ToolMessage).tool_call_id).toBe('call_1')
@@ -248,14 +246,14 @@ describe('DeepSeekAdapter', () => {
     streamMock.mockImplementation(() => {
       controller.abort()
       return {
-        [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('aborted')) })
+        [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('aborted')) }),
       }
     })
 
     const events: ModelEvent[] = []
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: controller.signal
+      signal: controller.signal,
     })) {
       events.push(event)
     }
@@ -263,14 +261,14 @@ describe('DeepSeekAdapter', () => {
 
     streamMock.mockImplementation(() => ({
       [Symbol.asyncIterator]: () => ({
-        next: () => Promise.reject(Object.assign(new Error('unauthorized'), { status: 401 }))
-      })
+        next: () => Promise.reject(Object.assign(new Error('unauthorized'), { status: 401 })),
+      }),
     }))
 
     await expect(async () => {
       for await (const event of createAdapter().stream({
         messages: [{ role: 'user', content: 'hi' }],
-        signal: new AbortController().signal
+        signal: new AbortController().signal,
       })) {
         void event
       }

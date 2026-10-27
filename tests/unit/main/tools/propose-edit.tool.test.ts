@@ -5,7 +5,7 @@ import {
   ToolExecutionError,
   ToolRegistry,
   type EditProposalRequest,
-  type ToolContext
+  type ToolContext,
 } from '@main/ai/tools/tool-registry'
 import { ServiceError } from '@main/utils/service-error'
 
@@ -13,7 +13,7 @@ function createHarness(
   propose: (input: EditProposalRequest) => Promise<{
     editSessionId: string
     fileEditId: string
-  }> = async () => ({ editSessionId: 'session-1', fileEditId: 'file-1' })
+  }> = async () => ({ editSessionId: 'session-1', fileEditId: 'file-1' }),
 ): {
   tool: ReturnType<typeof createProposeEditTool>
   registry: ToolRegistry
@@ -29,7 +29,7 @@ function createHarness(
     conversationId: 'conversation-1',
     runId: 'run-1',
     editService: { propose: proposeMock },
-    onEditProposed
+    onEditProposed,
   }
 
   const tool = createProposeEditTool()
@@ -48,9 +48,9 @@ describe('propose_file_edit 工具', () => {
         path: 'src/app.ts',
         operation: 'modify',
         oldText: 'const a = 1',
-        newText: 'const a = 2'
+        newText: 'const a = 2',
       },
-      context
+      context,
     )
 
     expect(propose).toHaveBeenCalledWith({
@@ -61,7 +61,7 @@ describe('propose_file_edit 工具', () => {
       operation: 'modify',
       oldText: 'const a = 1',
       newText: 'const a = 2',
-      content: undefined
+      content: undefined,
     })
     expect(result.content).toContain('# 修改建议已提交审核')
     expect(result.content).toContain('文件: src/app.ts')
@@ -74,7 +74,7 @@ describe('propose_file_edit 工具', () => {
       editSessionId: 'session-1',
       fileEditId: 'file-1',
       relativePath: 'src/app.ts',
-      operation: 'modify'
+      operation: 'modify',
     })
   })
 
@@ -83,16 +83,14 @@ describe('propose_file_edit 工具', () => {
 
     const result = await tool.execute(
       { path: 'src\\new.ts', operation: 'create', content: 'export const x = 1\n' },
-      context
+      context,
     )
 
-    expect(propose).toHaveBeenCalledWith(
-      expect.objectContaining({ relativePath: 'src/new.ts', operation: 'create' })
-    )
+    expect(propose).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'src/new.ts', operation: 'create' }))
     expect(result.content).toContain('操作: 新建文件')
     expect(result.summary).toBe('src/new.ts 修改建议待审核')
     expect(onEditProposed).toHaveBeenCalledWith(
-      expect.objectContaining({ relativePath: 'src/new.ts', operation: 'create' })
+      expect.objectContaining({ relativePath: 'src/new.ts', operation: 'create' }),
     )
   })
 
@@ -107,7 +105,7 @@ describe('propose_file_edit 工具', () => {
     const { tool, context } = createHarness()
 
     await expect(
-      tool.execute({ path: '.env', operation: 'create', content: 'SECRET=1' }, context)
+      tool.execute({ path: '.env', operation: 'create', content: 'SECRET=1' }, context),
     ).rejects.toMatchObject({ name: 'ToolExecutionError', code: 'SENSITIVE_FILE' })
   })
 
@@ -118,20 +116,20 @@ describe('propose_file_edit 工具', () => {
     await expect(
       tool.execute(
         { path: 'a.ts', operation: 'create', content: 'x' },
-        { ...base, runId: 'run-1', editService: { propose: vi.fn() } }
-      )
+        { ...base, runId: 'run-1', editService: { propose: vi.fn() } },
+      ),
     ).rejects.toMatchObject({ code: 'TOOL_FAILED' })
     await expect(
       tool.execute(
         { path: 'a.ts', operation: 'create', content: 'x' },
-        { ...base, conversationId: 'conversation-1', editService: { propose: vi.fn() } }
-      )
+        { ...base, conversationId: 'conversation-1', editService: { propose: vi.fn() } },
+      ),
     ).rejects.toMatchObject({ code: 'TOOL_FAILED' })
     await expect(
       tool.execute(
         { path: 'a.ts', operation: 'create', content: 'x' },
-        { ...base, conversationId: 'conversation-1', runId: 'run-1' }
-      )
+        { ...base, conversationId: 'conversation-1', runId: 'run-1' },
+      ),
     ).rejects.toMatchObject({ code: 'TOOL_FAILED' })
   })
 
@@ -141,10 +139,7 @@ describe('propose_file_edit 工具', () => {
     controller.abort()
 
     await expect(
-      tool.execute(
-        { path: 'a.ts', operation: 'create', content: 'x' },
-        { ...context, signal: controller.signal }
-      )
+      tool.execute({ path: 'a.ts', operation: 'create', content: 'x' }, { ...context, signal: controller.signal }),
     ).rejects.toMatchObject({ code: 'TOOL_FAILED' })
     expect(propose).not.toHaveBeenCalled()
   })
@@ -155,7 +150,7 @@ describe('propose_file_edit 工具', () => {
     })
 
     await expect(
-      tool.execute({ path: 'a.ts', operation: 'modify', oldText: 'x', newText: 'y' }, context)
+      tool.execute({ path: 'a.ts', operation: 'modify', oldText: 'x', newText: 'y' }, context),
     ).rejects.toMatchObject({ name: 'ToolExecutionError', code: 'EDIT_CONFLICT' })
   })
 })
@@ -166,10 +161,10 @@ describe('propose_file_edit 参数校验', () => {
 
     for (const args of [
       { path: 'a.ts', content: 'x' },
-      { path: 'a.ts', operation: 'create', content: 'x', extra: true }
+      { path: 'a.ts', operation: 'create', content: 'x', extra: true },
     ]) {
       await expect(registry.execute('propose_file_edit', args, context)).rejects.toMatchObject({
-        code: 'INVALID_ARGUMENTS'
+        code: 'INVALID_ARGUMENTS',
       })
     }
   })
@@ -180,10 +175,10 @@ describe('propose_file_edit 参数校验', () => {
     for (const args of [
       { path: 'a.ts', operation: 'modify', newText: 'y' },
       { path: 'a.ts', operation: 'modify', oldText: 'x' },
-      { path: 'a.ts', operation: 'modify', oldText: '', newText: 'y' }
+      { path: 'a.ts', operation: 'modify', oldText: '', newText: 'y' },
     ]) {
       await expect(registry.execute('propose_file_edit', args, context)).rejects.toMatchObject({
-        code: 'INVALID_ARGUMENTS'
+        code: 'INVALID_ARGUMENTS',
       })
     }
   })
@@ -197,13 +192,13 @@ describe('propose_file_edit 参数校验', () => {
         operation: 'modify',
         oldText: 'x',
         newText: 'y',
-        content: 'z'
+        content: 'z',
       },
       { path: 'a.ts', operation: 'create', content: 'x', oldText: 'a' },
-      { path: 'a.ts', operation: 'create', content: 'x', newText: 'b' }
+      { path: 'a.ts', operation: 'create', content: 'x', newText: 'b' },
     ]) {
       await expect(registry.execute('propose_file_edit', args, context)).rejects.toMatchObject({
-        code: 'INVALID_ARGUMENTS'
+        code: 'INVALID_ARGUMENTS',
       })
     }
   })
@@ -212,7 +207,7 @@ describe('propose_file_edit 参数校验', () => {
     const { registry, context } = createHarness()
 
     await expect(
-      registry.execute('propose_file_edit', { path: 'a.ts', operation: 'create' }, context)
+      registry.execute('propose_file_edit', { path: 'a.ts', operation: 'create' }, context),
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENTS' })
   })
 
@@ -226,10 +221,10 @@ describe('propose_file_edit 参数校验', () => {
           path: 'a.ts',
           operation: 'modify',
           oldText: 'a'.repeat(MAX_EDIT_OLD_TEXT_CHARS + 1),
-          newText: 'b'
+          newText: 'b',
         },
-        context
-      )
+        context,
+      ),
     ).rejects.toBeInstanceOf(ToolExecutionError)
   })
 })

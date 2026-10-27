@@ -21,7 +21,7 @@ vi.mock('@langchain/openai', () => ({
     stream(...args: unknown[]): unknown {
       return openAiStreamMock(...args)
     }
-  }
+  },
 }))
 
 vi.mock('@langchain/deepseek', () => ({
@@ -37,7 +37,7 @@ vi.mock('@langchain/deepseek', () => ({
     stream(...args: unknown[]): unknown {
       return deepSeekStreamMock(...args)
     }
-  }
+  },
 }))
 
 const { OpenAiChatAdapter } = await import('@main/ai/openai.adapter')
@@ -55,7 +55,7 @@ function createAdapter(apiKey = 'sk-test-only'): InstanceType<typeof OpenAiChatA
   return new OpenAiChatAdapter({
     apiKey,
     model: 'gpt-4o-mini',
-    baseUrl: 'https://api.openai.com/v1'
+    baseUrl: 'https://api.openai.com/v1',
   })
 }
 
@@ -67,7 +67,7 @@ describe('OpenAiChatAdapter', () => {
 
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       void event
     }
@@ -77,8 +77,8 @@ describe('OpenAiChatAdapter', () => {
         apiKey: 'sk-test-only',
         model: 'gpt-4o-mini',
         streaming: true,
-        configuration: { baseURL: 'https://api.openai.com/v1' }
-      })
+        configuration: { baseURL: 'https://api.openai.com/v1' },
+      }),
     )
   })
 
@@ -89,14 +89,12 @@ describe('OpenAiChatAdapter', () => {
 
     for await (const event of createAdapter('').stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       void event
     }
 
-    expect(openAiConstructorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'not-needed' })
-    )
+    expect(openAiConstructorMock).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'not-needed' }))
   })
 
   it('转换文本块与 usage', async () => {
@@ -105,8 +103,8 @@ describe('OpenAiChatAdapter', () => {
       yield {
         content: [
           { type: 'text', text: '好' },
-          { type: 'image_url', image_url: { url: 'https://example.com/x.png' } }
-        ]
+          { type: 'image_url', image_url: { url: 'https://example.com/x.png' } },
+        ],
       }
       yield { content: '', usage_metadata: { input_tokens: 5, output_tokens: 2 } }
     })
@@ -114,7 +112,7 @@ describe('OpenAiChatAdapter', () => {
     const events: ModelEvent[] = []
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       events.push(event)
     }
@@ -122,7 +120,7 @@ describe('OpenAiChatAdapter', () => {
     expect(events).toEqual([
       { type: 'text_delta', text: '你' },
       { type: 'text_delta', text: '好' },
-      { type: 'usage', inputTokens: 5, outputTokens: 2 }
+      { type: 'usage', inputTokens: 5, outputTokens: 2 },
     ])
   })
 
@@ -130,9 +128,7 @@ describe('OpenAiChatAdapter', () => {
     openAiStreamMock.mockImplementation(async function* () {
       yield {
         content: '',
-        tool_call_chunks: [
-          { index: 0, id: 'call_1', name: 'read_file', args: '{"path":"src/a.ts"}' }
-        ]
+        tool_call_chunks: [{ index: 0, id: 'call_1', name: 'read_file', args: '{"path":"src/a.ts"}' }],
       }
     })
 
@@ -140,7 +136,7 @@ describe('OpenAiChatAdapter', () => {
     for await (const event of createAdapter().stream({
       messages: [{ role: 'user', content: 'hi' }],
       signal: new AbortController().signal,
-      tools: [{ name: 'read_file', description: '读取文件', parameters: { type: 'object' } }]
+      tools: [{ name: 'read_file', description: '读取文件', parameters: { type: 'object' } }],
     })) {
       events.push(event)
     }
@@ -151,26 +147,24 @@ describe('OpenAiChatAdapter', () => {
         function: {
           name: 'read_file',
           description: '读取文件',
-          parameters: { type: 'object' }
-        }
-      }
+          parameters: { type: 'object' },
+        },
+      },
     ])
-    expect(events).toEqual([
-      { type: 'tool_call', id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } }
-    ])
+    expect(events).toEqual([{ type: 'tool_call', id: 'call_1', name: 'read_file', arguments: { path: 'src/a.ts' } }])
   })
 
   it('HTTP 认证错误映射为 MODEL_CONFIG_ERROR', async () => {
     openAiStreamMock.mockImplementation(() => ({
       [Symbol.asyncIterator]: () => ({
-        next: () => Promise.reject(Object.assign(new Error('unauthorized'), { status: 401 }))
-      })
+        next: () => Promise.reject(Object.assign(new Error('unauthorized'), { status: 401 })),
+      }),
     }))
 
     await expect(async () => {
       for await (const event of createAdapter('bad-key').stream({
         messages: [{ role: 'user', content: 'hi' }],
-        signal: new AbortController().signal
+        signal: new AbortController().signal,
       })) {
         void event
       }
@@ -192,34 +186,30 @@ describe('createModelAdapter', () => {
       apiKey: 'sk-deepseek',
       model: 'deepseek-chat',
       baseUrl: 'https://api.deepseek.com',
-      toolsEnabled: true
+      toolsEnabled: true,
     })
     const compatible = createModelAdapter({
       provider: 'openai-compatible',
       apiKey: 'sk-openai',
       model: 'gpt-4o-mini',
       baseUrl: 'https://api.openai.com/v1',
-      toolsEnabled: true
+      toolsEnabled: true,
     })
 
     for await (const event of deepseek.stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       expect(event).toEqual({ type: 'text_delta', text: 'deepseek' })
     }
     for await (const event of compatible.stream({
       messages: [{ role: 'user', content: 'hi' }],
-      signal: new AbortController().signal
+      signal: new AbortController().signal,
     })) {
       expect(event).toEqual({ type: 'text_delta', text: 'openai' })
     }
 
-    expect(deepSeekConstructorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'deepseek-chat' })
-    )
-    expect(openAiConstructorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt-4o-mini' })
-    )
+    expect(deepSeekConstructorMock).toHaveBeenCalledWith(expect.objectContaining({ model: 'deepseek-chat' }))
+    expect(openAiConstructorMock).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-4o-mini' }))
   })
 })

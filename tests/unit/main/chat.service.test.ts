@@ -9,11 +9,7 @@ import { ChatStore } from '@main/database/chat.store'
 import { ModelAdapterError } from '@main/ai/model-error'
 import type { ModelAdapter, ModelEvent, ModelStreamRequest } from '@main/ai/model-adapter'
 import { ToolExecutionError, ToolRegistry } from '@main/ai/tools/tool-registry'
-import {
-  ChatService,
-  type ChatEventSink,
-  type ChatServiceOptions
-} from '@main/services/chat.service'
+import { ChatService, type ChatEventSink, type ChatServiceOptions } from '@main/services/chat.service'
 import { ServiceError } from '@main/utils/service-error'
 import type { ChatEvent } from '@shared/types/chat'
 
@@ -31,7 +27,7 @@ function createAdapter(behavior: StreamBehavior, requests?: ModelStreamRequest[]
     stream(request) {
       requests?.push(request)
       return behavior(request)
-    }
+    },
   }
 }
 
@@ -41,7 +37,7 @@ function textDelta(text: string): ModelEvent {
 
 function failingStream(error: unknown): AsyncIterable<ModelEvent> {
   return {
-    [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) })
+    [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
   }
 }
 
@@ -51,8 +47,8 @@ function hangingStream(request: ModelStreamRequest): AsyncIterable<ModelEvent> {
       next: async () => {
         await onceAborted(request.signal)
         return { done: true, value: undefined }
-      }
-    })
+      },
+    }),
   }
 }
 
@@ -93,14 +89,11 @@ function createSink(): {
   return { events, sink, waitFor }
 }
 
-function createService(
-  behavior: StreamBehavior,
-  options: Partial<ChatServiceOptions> = {}
-): ChatService {
+function createService(behavior: StreamBehavior, options: Partial<ChatServiceOptions> = {}): ChatService {
   const service = new ChatService({
     adapterFactory: () => createAdapter(behavior),
     env: CONFIGURED_ENV,
-    ...options
+    ...options,
   })
   service.initialize(store)
   return service
@@ -135,16 +128,11 @@ describe('ChatService 正常对话', () => {
 
     const result = service.send(
       { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '你好' },
-      sink
+      sink,
     )
     const completed = await waitFor((event) => event.type === 'completed')
 
-    expect(events.map((event) => event.type)).toEqual([
-      'started',
-      'text_delta',
-      'text_delta',
-      'completed'
-    ])
+    expect(events.map((event) => event.type)).toEqual(['started', 'text_delta', 'text_delta', 'completed'])
     expect(completed.type).toBe('completed')
     if (completed.type === 'completed') {
       expect(completed.assistantMessage.content).toBe('你好')
@@ -168,9 +156,9 @@ describe('ChatService 正常对话', () => {
       {
         requestId: crypto.randomUUID(),
         conversationId: conversation.id,
-        content: '  如何排查登录问题？  '
+        content: '  如何排查登录问题？  ',
       },
-      sink
+      sink,
     )
     await waitFor((event) => event.type === 'completed')
 
@@ -184,16 +172,13 @@ describe('ChatService 正常对话', () => {
         createAdapter(async function* () {
           yield textDelta('回答')
         }, requests),
-      env: CONFIGURED_ENV
+      env: CONFIGURED_ENV,
     })
     service.initialize(store)
 
     const conversation = service.createConversation(null)
     const first = createSink()
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      first.sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, first.sink)
     await first.waitFor((event) => event.type === 'completed')
 
     const second = createSink()
@@ -214,9 +199,9 @@ describe('ChatService 正常对话', () => {
     const conversation = service.createConversation(null)
     const { sink } = createSink()
 
-    expect(() =>
-      service.retry({ requestId: crypto.randomUUID(), conversationId: conversation.id }, sink)
-    ).toThrowError(ServiceError)
+    expect(() => service.retry({ requestId: crypto.randomUUID(), conversationId: conversation.id }, sink)).toThrowError(
+      ServiceError,
+    )
   })
 })
 
@@ -249,15 +234,12 @@ describe('ChatService 取消与超时', () => {
         yield textDelta('部分')
         await onceAborted(request.signal)
       },
-      { timeoutMs: 20 }
+      { timeoutMs: 20 },
     )
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     const error = await waitFor((event) => event.type === 'error')
 
     expect(error.type).toBe('error')
@@ -276,10 +258,7 @@ describe('ChatService 取消与超时', () => {
     const conversation = service.createConversation(null)
     const { events, sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     await waitFor((event) => event.type === 'text_delta')
 
     service.cancelAll()
@@ -293,17 +272,12 @@ describe('ChatService 取消与超时', () => {
 describe('ChatService 错误映射', () => {
   it('适配层错误码原样向上传递', async () => {
     const service = createService(() =>
-      failingStream(
-        new ModelAdapterError('MODEL_CONFIG_ERROR', 'API Key 无效或无权访问该模型', 401)
-      )
+      failingStream(new ModelAdapterError('MODEL_CONFIG_ERROR', 'API Key 无效或无权访问该模型', 401)),
     )
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     const error = await waitFor((event) => event.type === 'error')
 
     expect(error.type).toBe('error')
@@ -318,10 +292,7 @@ describe('ChatService 错误映射', () => {
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     const error = await waitFor((event) => event.type === 'error')
 
     expect(error.type).toBe('error')
@@ -338,10 +309,7 @@ describe('ChatService 错误映射', () => {
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     const error = await waitFor((event) => event.type === 'error')
 
     expect(error.type).toBe('error')
@@ -354,17 +322,14 @@ describe('ChatService 错误映射', () => {
   it('未配置 Key 时不写入用户消息', () => {
     const service = new ChatService({
       adapterFactory: () => createAdapter(() => failingStream(new Error('unused'))),
-      env: {}
+      env: {},
     })
     service.initialize(store)
     const conversation = service.createConversation(null)
     const { sink } = createSink()
 
     try {
-      service.send(
-        { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-        sink
-      )
+      service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
       expect.unreachable('应抛出配置错误')
     } catch (error) {
       expect(error).toBeInstanceOf(ServiceError)
@@ -389,10 +354,7 @@ describe('ChatService 请求约束', () => {
     await waitFor((event) => event.type === 'text_delta')
 
     expect(() =>
-      service.send(
-        { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '第二个' },
-        sink
-      )
+      service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '第二个' }, sink),
     ).toThrowError(/当前已有生成中的请求/)
 
     service.cancel(requestId)
@@ -410,20 +372,17 @@ describe('ChatService 请求约束', () => {
     service.send({ requestId, conversationId: conversation.id, content: '问题' }, sink)
     await waitFor((event) => event.type === 'completed')
 
-    expect(() =>
-      service.send({ requestId, conversationId: conversation.id, content: '重复' }, sink)
-    ).toThrowError(/请求 ID 已使用/)
+    expect(() => service.send({ requestId, conversationId: conversation.id, content: '重复' }, sink)).toThrowError(
+      /请求 ID 已使用/,
+    )
 
-    expect(store.listMessages(conversation.id).map((message) => message.content)).toEqual([
-      '问题',
-      'ok'
-    ])
+    expect(store.listMessages(conversation.id).map((message) => message.content)).toEqual(['问题', 'ok'])
   })
 
   it('未初始化数据库时拒绝发送', () => {
     const service = new ChatService({
       adapterFactory: () => createAdapter(() => failingStream(new Error('unused'))),
-      env: CONFIGURED_ENV
+      env: CONFIGURED_ENV,
     })
     const { sink } = createSink()
 
@@ -432,10 +391,10 @@ describe('ChatService 请求约束', () => {
         {
           requestId: crypto.randomUUID(),
           conversationId: crypto.randomUUID(),
-          content: '问题'
+          content: '问题',
         },
-        sink
-      )
+        sink,
+      ),
     ).toThrowError(/数据库不可用/)
   })
 })
@@ -443,9 +402,13 @@ describe('ChatService 请求约束', () => {
 describe('ChatService 工具循环', () => {
   beforeEach(() => {
     const now = new Date().toISOString()
-    db.prepare(
-      'INSERT INTO repositories (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-    ).run('repo-1', 'demo-repo', process.cwd(), now, now)
+    db.prepare('INSERT INTO repositories (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+      'repo-1',
+      'demo-repo',
+      process.cwd(),
+      now,
+      now,
+    )
   })
 
   function createToolRegistry(
@@ -453,7 +416,7 @@ describe('ChatService 工具循环', () => {
       content: string
       summary: string
       truncated: boolean
-    }>
+    }>,
   ): ToolRegistry {
     const registry = new ToolRegistry()
     registry.register({
@@ -461,7 +424,7 @@ describe('ChatService 工具循环', () => {
       description: '读取文件',
       schema: z.strictObject({ path: z.string() }),
       summarizeArgs: (args) => args.path,
-      execute
+      execute,
     })
     return registry
   }
@@ -471,7 +434,7 @@ describe('ChatService 工具循环', () => {
     const execute = vi.fn(async (args: { path: string }) => ({
       content: `file content: ${args.path}`,
       summary: `读取 ${args.path}`,
-      truncated: false
+      truncated: false,
     }))
     let round = 0
 
@@ -484,7 +447,7 @@ describe('ChatService 工具循环', () => {
             type: 'tool_call',
             id: 'call_1',
             name: 'read_file',
-            arguments: { path: 'src/a.ts' }
+            arguments: { path: 'src/a.ts' },
           }
           return
         }
@@ -492,16 +455,13 @@ describe('ChatService 工具循环', () => {
       },
       {
         toolRegistry: createToolRegistry(execute),
-        locateRepository: () => ({ name: 'demo-repo' })
-      }
+        locateRepository: () => ({ name: 'demo-repo' }),
+      },
     )
     const conversation = service.createConversation('repo-1')
     const { events, sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' }, sink)
     const completed = await waitFor((event) => event.type === 'completed')
 
     expect(events.map((event) => event.type)).toEqual([
@@ -509,7 +469,7 @@ describe('ChatService 工具循环', () => {
       'tool_started',
       'tool_finished',
       'text_delta',
-      'completed'
+      'completed',
     ])
     expect(requests[0].tools).toHaveLength(1)
     expect(requests[0].messages[0].content).toContain('list_files')
@@ -523,8 +483,8 @@ describe('ChatService 工具循环', () => {
           name: 'read_file',
           argumentsSummary: 'src/a.ts',
           status: 'success',
-          summary: '读取 src/a.ts'
-        })
+          summary: '读取 src/a.ts',
+        }),
       ])
     }
 
@@ -547,14 +507,14 @@ describe('ChatService 工具循环', () => {
           editSessionId: 'session-1',
           fileEditId: 'file-1',
           relativePath: args.path,
-          operation: 'modify'
+          operation: 'modify',
         })
         return {
           content: '修改建议已提交审核',
           summary: `${args.path} 修改建议待审核`,
-          truncated: false
+          truncated: false,
         }
-      }
+      },
     })
 
     const service = createService(
@@ -565,7 +525,7 @@ describe('ChatService 工具循环', () => {
             type: 'tool_call',
             id: 'call_edit',
             name: 'propose_file_edit',
-            arguments: { path: 'src/a.ts' }
+            arguments: { path: 'src/a.ts' },
           }
           return
         }
@@ -573,16 +533,13 @@ describe('ChatService 工具循环', () => {
       },
       {
         toolRegistry: registry,
-        locateRepository: () => ({ name: 'demo-repo' })
-      }
+        locateRepository: () => ({ name: 'demo-repo' }),
+      },
     )
     const conversation = service.createConversation('repo-1')
     const { events, sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '改一下 a.ts' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '改一下 a.ts' }, sink)
     const editEvent = await waitFor((event) => event.type === 'edit_proposed')
     await waitFor((event) => event.type === 'completed')
 
@@ -593,7 +550,7 @@ describe('ChatService 工具循环', () => {
         editSessionId: 'session-1',
         fileEditId: 'file-1',
         relativePath: 'src/a.ts',
-        operation: 'modify'
+        operation: 'modify',
       })
     }
 
@@ -603,7 +560,7 @@ describe('ChatService 工具循环', () => {
       'edit_proposed',
       'tool_finished',
       'text_delta',
-      'completed'
+      'completed',
     ])
   })
 
@@ -612,22 +569,19 @@ describe('ChatService 工具循环', () => {
     const registry = createToolRegistry(async () => ({
       content: 'x',
       summary: 'x',
-      truncated: false
+      truncated: false,
     }))
     const service = createService(
       async function* (request) {
         requests.push(request)
         yield textDelta('仅对话')
       },
-      { toolRegistry: registry }
+      { toolRegistry: registry },
     )
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     await waitFor((event) => event.type === 'completed')
 
     expect(requests[0].tools).toBeUndefined()
@@ -643,7 +597,7 @@ describe('ChatService 工具循环', () => {
             type: 'tool_call',
             id: `call_${calls}`,
             name: 'read_file',
-            arguments: { path: `src/${calls}.ts` }
+            arguments: { path: `src/${calls}.ts` },
           }
           return
         }
@@ -652,19 +606,16 @@ describe('ChatService 工具循环', () => {
         toolRegistry: createToolRegistry(async () => ({
           content: 'ok',
           summary: 'ok',
-          truncated: false
+          truncated: false,
         })),
         locateRepository: () => ({ name: 'demo-repo' }),
-        agentLimits: { maxRounds: 1 }
-      }
+        agentLimits: { maxRounds: 1 },
+      },
     )
     const conversation = service.createConversation('repo-1')
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     const error = await waitFor((event) => event.type === 'error')
 
     expect(error.type).toBe('error')
@@ -680,13 +631,13 @@ describe('ChatService 工具循环', () => {
       apiKey: 'sk-openai',
       model: 'qwen-plus',
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      toolsEnabled: true
+      toolsEnabled: true,
     }
     const requests: ModelStreamRequest[] = []
     const adapterFactory = vi.fn(() =>
       createAdapter(async function* () {
         yield textDelta('回答')
-      }, requests)
+      }, requests),
     )
     const service = createService(
       async function* () {
@@ -694,16 +645,13 @@ describe('ChatService 工具循环', () => {
       },
       {
         adapterFactory,
-        configProvider: () => providerConfig
-      }
+        configProvider: () => providerConfig,
+      },
     )
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     await waitFor((event) => event.type === 'completed')
 
     expect(adapterFactory).toHaveBeenCalledWith(providerConfig)
@@ -721,7 +669,7 @@ describe('ChatService 工具循环', () => {
         toolRegistry: createToolRegistry(async () => ({
           content: 'x',
           summary: 'x',
-          truncated: false
+          truncated: false,
         })),
         locateRepository: () => ({ name: 'demo-repo' }),
         configProvider: () => ({
@@ -729,17 +677,14 @@ describe('ChatService 工具循环', () => {
           apiKey: 'sk-test-only',
           model: 'deepseek-chat',
           baseUrl: 'https://api.deepseek.com',
-          toolsEnabled: false
-        })
-      }
+          toolsEnabled: false,
+        }),
+      },
     )
     const conversation = service.createConversation('repo-1')
     const { events, sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '看看入口' }, sink)
     await waitFor((event) => event.type === 'completed')
 
     expect(requests[0].tools).toBeUndefined()
@@ -765,23 +710,20 @@ describe('ChatService 工具循环', () => {
         toolRegistry: createToolRegistry(async () => {
           throw new ToolExecutionError('FILE_NOT_FOUND', '文件不存在或不可访问')
         }),
-        locateRepository: () => ({ name: 'demo-repo' })
-      }
+        locateRepository: () => ({ name: 'demo-repo' }),
+      },
     )
     const conversation = service.createConversation('repo-1')
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '读取 a.ts' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '读取 a.ts' }, sink)
     const completed = await waitFor((event) => event.type === 'completed')
 
     expect(completed.type).toBe('completed')
     if (completed.type === 'completed') {
       expect(completed.assistantMessage.toolCalls?.[0]).toMatchObject({
         status: 'error',
-        summary: '文件不存在或不可访问'
+        summary: '文件不存在或不可访问',
       })
     }
   })
@@ -795,10 +737,7 @@ describe('ChatService.deleteConversation', () => {
     const conversation = service.createConversation(null)
     const { sink, waitFor } = createSink()
 
-    service.send(
-      { requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' },
-      sink
-    )
+    service.send({ requestId: crypto.randomUUID(), conversationId: conversation.id, content: '问题' }, sink)
     await waitFor((event) => event.type === 'completed')
 
     service.deleteConversation(conversation.id)
@@ -860,14 +799,12 @@ describe('ChatService.testConnection', () => {
 
   it('适配层错误映射为 ServiceError', async () => {
     const service = createService(() =>
-      failingStream(
-        new ModelAdapterError('MODEL_CONFIG_ERROR', 'API Key 无效或无权访问该模型', 401)
-      )
+      failingStream(new ModelAdapterError('MODEL_CONFIG_ERROR', 'API Key 无效或无权访问该模型', 401)),
     )
 
     await expect(service.testConnection()).rejects.toMatchObject({
       code: 'MODEL_CONFIG_ERROR',
-      message: 'API Key 无效或无权访问该模型'
+      message: 'API Key 无效或无权访问该模型',
     })
   })
 
@@ -882,9 +819,9 @@ describe('ChatService.testConnection', () => {
           apiKey: 'sk-openai',
           model: 'qwen-plus',
           baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-          toolsEnabled: true
-        })
-      }
+          toolsEnabled: true,
+        }),
+      },
     )
 
     await expect(service.testConnection()).resolves.toMatchObject({ model: 'qwen-plus' })
@@ -894,13 +831,13 @@ describe('ChatService.testConnection', () => {
     const service = new ChatService({
       adapterFactory: () => createAdapter(hangingStream),
       env: CONFIGURED_ENV,
-      connectionTimeoutMs: 20
+      connectionTimeoutMs: 20,
     })
     service.initialize(store)
 
     await expect(service.testConnection()).rejects.toMatchObject({
       code: 'MODEL_REQUEST_FAILED',
-      message: '模型连接超时，请检查网络或配置'
+      message: '模型连接超时，请检查网络或配置',
     })
   })
 })

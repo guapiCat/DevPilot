@@ -23,7 +23,7 @@ function record(id: string, overrides: Partial<ModelProfileRecord> = {}): ModelP
     isActive: false,
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
-    ...overrides
+    ...overrides,
   }
 }
 
@@ -54,7 +54,7 @@ describe('ModelProfileStore', () => {
       name: 'renamed',
       apiKeyCipher: 'cipher-2',
       isActive: true,
-      toolsEnabled: true
+      toolsEnabled: true,
     })
     expect(store.count()).toBe(1)
     expect(store.getActive()?.id).toBe('a')
@@ -117,8 +117,8 @@ describe('ModelProfileStore', () => {
       record('existing', {
         isActive: true,
         provider: 'deepseek',
-        apiKeyCipher: 'cipher'
-      })
+        apiKeyCipher: 'cipher',
+      }),
     )
 
     expect(() => store.insert(record('existing', { isActive: true }))).toThrow()

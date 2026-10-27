@@ -14,9 +14,7 @@ export const useEditStore = defineStore('edits', () => {
 
   let loadToken = 0
 
-  const totalCount = computed(() =>
-    sessions.value.reduce((sum, session) => sum + session.files.length, 0)
-  )
+  const totalCount = computed(() => sessions.value.reduce((sum, session) => sum + session.files.length, 0))
 
   const selected = computed<{ session: EditSession; file: FileEdit } | null>(() => {
     for (const session of sessions.value) {
@@ -84,10 +82,7 @@ export const useEditStore = defineStore('edits', () => {
     }
   }
 
-  async function applyFile(
-    editSessionId: string,
-    fileEditId: string
-  ): Promise<ApplyFileEditResult> {
+  async function applyFile(editSessionId: string, fileEditId: string): Promise<ApplyFileEditResult> {
     const key = editFileKey(editSessionId, fileEditId)
     actionKey.value = key
 
@@ -133,6 +128,6 @@ export const useEditStore = defineStore('edits', () => {
     loadPending,
     applyFile,
     rejectFile,
-    reset
+    reset,
   }
 })

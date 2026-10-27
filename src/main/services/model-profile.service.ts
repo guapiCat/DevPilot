@@ -5,7 +5,7 @@ import type {
   ModelProfileInput,
   ModelProfileSummary,
   ModelProviderKind,
-  TestModelProfileInput
+  TestModelProfileInput,
 } from '@shared/types/model'
 import type { ModelProfileRecord, ModelProfileStore } from '../database/model-profile.store'
 import type { SecretCipher } from '../security/secret-cipher'
@@ -15,7 +15,7 @@ import {
   readEnvBaseUrl,
   readEnvModelName,
   type EnvLike,
-  type ResolvedAiConfig
+  type ResolvedAiConfig,
 } from './settings.service'
 
 export interface ModelProfileServiceOptions {
@@ -36,7 +36,7 @@ function toSummary(record: ModelProfileRecord): ModelProfileSummary {
     toolsEnabled: record.toolsEnabled,
     hasApiKey: Boolean(record.apiKeyCipher),
     isActive: record.isActive,
-    updatedAt: record.updatedAt
+    updatedAt: record.updatedAt,
   }
 }
 
@@ -70,16 +70,8 @@ export class ModelProfileService {
     const profiles = store ? store.list().map(toSummary) : []
     const envConfigured = readAiConfigValues(this.env) !== null
 
-    const provider: ModelProviderKind | null = active
-      ? active.provider
-      : envConfigured
-        ? 'deepseek'
-        : null
-    const configured = active
-      ? active.provider === 'deepseek'
-        ? Boolean(active.apiKeyCipher)
-        : true
-      : envConfigured
+    const provider: ModelProviderKind | null = active ? active.provider : envConfigured ? 'deepseek' : null
+    const configured = active ? (active.provider === 'deepseek' ? Boolean(active.apiKeyCipher) : true) : envConfigured
 
     return {
       configured,
@@ -91,7 +83,7 @@ export class ModelProfileService {
       activeProfileId: active?.id ?? null,
       profiles,
       envConfigured,
-      secretStorageAvailable: this.cipher.isAvailable()
+      secretStorageAvailable: this.cipher.isAvailable(),
     }
   }
 
@@ -114,7 +106,7 @@ export class ModelProfileService {
         baseUrl: input.baseUrl,
         apiKeyCipher,
         toolsEnabled: input.toolsEnabled,
-        updatedAt: timestamp
+        updatedAt: timestamp,
       })
     } else {
       if (store.count() >= MAX_MODEL_PROFILES) {
@@ -131,7 +123,7 @@ export class ModelProfileService {
         toolsEnabled: input.toolsEnabled,
         isActive: store.count() === 0,
         createdAt: timestamp,
-        updatedAt: timestamp
+        updatedAt: timestamp,
       })
     }
 
@@ -172,7 +164,7 @@ export class ModelProfileService {
         model: active.model,
         baseUrl: active.baseUrl,
         toolsEnabled: active.toolsEnabled,
-        profileId: active.id
+        profileId: active.id,
       }
     }
 
@@ -181,7 +173,7 @@ export class ModelProfileService {
 
     throw new ServiceError(
       'MODEL_CONFIG_ERROR',
-      '未配置模型服务，请在设置页新增模型，或在 .env 中配置 DEEPSEEK_API_KEY'
+      '未配置模型服务，请在设置页新增模型，或在 .env 中配置 DEEPSEEK_API_KEY',
     )
   }
 
@@ -206,14 +198,11 @@ export class ModelProfileService {
       apiKey,
       model: input.model,
       baseUrl: input.baseUrl,
-      toolsEnabled: false
+      toolsEnabled: false,
     }
   }
 
-  private resolveCipherForSave(
-    input: ModelProfileInput,
-    existingCipher: string | null
-  ): string | null {
+  private resolveCipherForSave(input: ModelProfileInput, existingCipher: string | null): string | null {
     const apiKey = input.apiKey?.trim()
 
     if (!apiKey) {
@@ -224,10 +213,7 @@ export class ModelProfileService {
     }
 
     if (!this.cipher.isAvailable()) {
-      throw new ServiceError(
-        'SECRET_STORAGE_UNAVAILABLE',
-        '系统凭据加密不可用，无法安全保存 API Key；可改用 .env 配置'
-      )
+      throw new ServiceError('SECRET_STORAGE_UNAVAILABLE', '系统凭据加密不可用，无法安全保存 API Key；可改用 .env 配置')
     }
 
     return this.cipher.encrypt(apiKey)

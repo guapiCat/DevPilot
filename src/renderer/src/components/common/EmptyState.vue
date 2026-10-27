@@ -8,7 +8,7 @@ withDefaults(
     icon?: Component
     compact?: boolean
   }>(),
-  { compact: false }
+  { compact: false },
 )
 </script>
 

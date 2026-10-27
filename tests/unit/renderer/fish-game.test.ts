@@ -39,8 +39,6 @@ describe('pickFishJump', () => {
     const previous = { x: 458, y: 358 }
     const point = pickFishJump(bounds, [previous], sequence([0.5, 0.5, 0.5, 0.1]))
 
-    expect(Math.hypot(point.x - previous.x, point.y - previous.y)).toBeGreaterThanOrEqual(
-      FISH_MIN_JUMP_DISTANCE
-    )
+    expect(Math.hypot(point.x - previous.x, point.y - previous.y)).toBeGreaterThanOrEqual(FISH_MIN_JUMP_DISTANCE)
   })
 })

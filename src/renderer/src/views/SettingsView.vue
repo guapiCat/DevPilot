@@ -4,14 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   MODEL_PROVIDER_PRESETS,
   findModelProviderPreset,
-  matchModelProviderPreset
+  matchModelProviderPreset,
 } from '@shared/constants/model-presets'
 import type { AiConfigStatus, AppInfo } from '@shared/types/app'
 import type {
   ModelProfileInput,
   ModelProfileSummary,
   ModelProviderKind,
-  TestModelProfileInput
+  TestModelProfileInput,
 } from '@shared/types/model'
 import { desktopApi } from '@renderer/services/desktop-api'
 import { useChatStore } from '@renderer/stores/chat'
@@ -48,7 +48,7 @@ const form = reactive<ProfileForm>({
   model: '',
   baseUrl: '',
   apiKey: '',
-  toolsEnabled: true
+  toolsEnabled: true,
 })
 const presetId = ref('deepseek')
 const dialogVisible = ref(false)
@@ -65,12 +65,8 @@ const rowTestLoading = ref(false)
 const rowTestResult = ref<string | null>(null)
 const rowTestError = ref<string | null>(null)
 
-const activeProfile = computed(
-  () => config.value?.profiles.find((profile) => profile.isActive) ?? null
-)
-const editingProfile = computed(
-  () => config.value?.profiles.find((profile) => profile.id === editingId.value) ?? null
-)
+const activeProfile = computed(() => config.value?.profiles.find((profile) => profile.isActive) ?? null)
+const editingProfile = computed(() => config.value?.profiles.find((profile) => profile.id === editingId.value) ?? null)
 const hasStoredKey = computed(() => Boolean(editingProfile.value?.hasApiKey))
 
 function providerLabel(provider: ModelProviderKind): string {
@@ -82,10 +78,7 @@ async function loadSettings(): Promise<void> {
   loadError.value = null
 
   try {
-    const [configStatus, info] = await Promise.all([
-      desktopApi.settings.getAiConfigStatus(),
-      desktopApi.app.getInfo()
-    ])
+    const [configStatus, info] = await Promise.all([desktopApi.settings.getAiConfigStatus(), desktopApi.app.getInfo()])
     config.value = configStatus
     appInfo.value = info
   } catch (error) {
@@ -198,7 +191,7 @@ function buildDraftInput(): TestModelProfileInput {
     provider: form.provider,
     model: form.model,
     baseUrl: form.baseUrl,
-    ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {})
+    ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
   }
 }
 
@@ -227,7 +220,7 @@ async function saveProfile(): Promise<void> {
     model: form.model,
     baseUrl: form.baseUrl,
     ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
-    toolsEnabled: form.toolsEnabled
+    toolsEnabled: form.toolsEnabled,
   }
 
   try {
@@ -264,8 +257,8 @@ async function deleteProfile(profile: ModelProfileSummary): Promise<void> {
       {
         confirmButtonText: '删除',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
+        type: 'warning',
+      },
     )
   } catch {
     return
@@ -292,7 +285,7 @@ async function testProfile(profile: ModelProfileSummary): Promise<void> {
       profileId: profile.id,
       provider: profile.provider,
       model: profile.model,
-      baseUrl: profile.baseUrl
+      baseUrl: profile.baseUrl,
     })
     rowTestResult.value = `${result.model} · ${result.latencyMs} ms`
   } catch (error) {
@@ -325,8 +318,7 @@ onMounted(() => {
           :title="loadError"
           description="无法从主进程读取设置，请检查应用是否正常启动。"
           show-icon
-          :closable="false"
-        />
+          :closable="false" />
 
         <section class="settings-card">
           <header class="card-header">
@@ -349,8 +341,7 @@ onMounted(() => {
               title="系统凭据加密不可用"
               description="无法安全保存新的 API Key，可改用 .env 配置，或检查系统凭据服务。"
               show-icon
-              :closable="false"
-            />
+              :closable="false" />
 
             <el-alert
               v-if="config.source === 'env'"
@@ -359,8 +350,7 @@ onMounted(() => {
               title="当前使用 .env 配置"
               description="新增模型档案后，将优先使用档案中的当前模型。"
               show-icon
-              :closable="false"
-            />
+              :closable="false" />
             <el-alert
               v-else-if="config.source === 'none'"
               class="model-alert"
@@ -368,8 +358,7 @@ onMounted(() => {
               title="尚未配置模型服务"
               description="点击“新增模型”填写服务商、模型与 API Key。"
               show-icon
-              :closable="false"
-            />
+              :closable="false" />
 
             <dl class="field-grid">
               <dt>当前模型</dt>
@@ -389,20 +378,11 @@ onMounted(() => {
             <div class="actions">
               <el-button size="small" type="primary" @click="openCreate">新增模型</el-button>
               <el-button size="small" :loading="loading" @click="loadSettings">重新检测</el-button>
-              <el-button
-                size="small"
-                :disabled="!config.configured"
-                :loading="testLoading"
-                @click="testAiConnection"
-              >
+              <el-button size="small" :disabled="!config.configured" :loading="testLoading" @click="testAiConnection">
                 测试当前模型
               </el-button>
-              <span v-if="testResult" class="inline-status ok">
-                <span class="dot"></span>{{ testResult }}
-              </span>
-              <span v-if="testError" class="inline-status danger">
-                <span class="dot"></span>{{ testError }}
-              </span>
+              <span v-if="testResult" class="inline-status ok"> <span class="dot"></span>{{ testResult }} </span>
+              <span v-if="testError" class="inline-status danger"> <span class="dot"></span>{{ testError }} </span>
             </div>
 
             <div v-if="config.profiles.length > 0" class="profile-list">
@@ -410,56 +390,36 @@ onMounted(() => {
                 v-for="profile in config.profiles"
                 :key="profile.id"
                 class="profile-row"
-                :class="{ active: profile.isActive }"
-              >
+                :class="{ active: profile.isActive }">
                 <div class="profile-info">
                   <div class="profile-name">
                     <span class="profile-title">{{ profile.name }}</span>
-                    <el-tag v-if="profile.isActive" size="small" type="success" effect="dark">
-                      当前
-                    </el-tag>
-                    <el-tag size="small" effect="plain">{{
-                      providerLabel(profile.provider)
-                    }}</el-tag>
-                    <el-tag v-if="!profile.toolsEnabled" size="small" type="warning" effect="plain">
-                      工具关闭
-                    </el-tag>
+                    <el-tag v-if="profile.isActive" size="small" type="success" effect="dark"> 当前 </el-tag>
+                    <el-tag size="small" effect="plain">{{ providerLabel(profile.provider) }}</el-tag>
+                    <el-tag v-if="!profile.toolsEnabled" size="small" type="warning" effect="plain"> 工具关闭 </el-tag>
                   </div>
                   <div class="profile-meta mono">{{ profile.model }} · {{ profile.baseUrl }}</div>
                   <div class="profile-meta">
                     {{ profile.hasApiKey ? '已保存 API Key' : '未设置 API Key' }}
-                    <span v-if="rowTestId === profile.id && rowTestResult">
-                      · 连接成功 · {{ rowTestResult }}
-                    </span>
-                    <span
-                      v-if="rowTestId === profile.id && rowTestError"
-                      class="profile-test-error"
-                    >
+                    <span v-if="rowTestId === profile.id && rowTestResult"> · 连接成功 · {{ rowTestResult }} </span>
+                    <span v-if="rowTestId === profile.id && rowTestError" class="profile-test-error">
                       · {{ rowTestError }}
                     </span>
                   </div>
                 </div>
                 <div class="profile-actions">
-                  <el-button
-                    v-if="!profile.isActive"
-                    size="small"
-                    text
-                    @click="activateProfile(profile)"
-                  >
+                  <el-button v-if="!profile.isActive" size="small" text @click="activateProfile(profile)">
                     设为当前
                   </el-button>
                   <el-button
                     size="small"
                     text
                     :loading="rowTestId === profile.id && rowTestLoading"
-                    @click="testProfile(profile)"
-                  >
+                    @click="testProfile(profile)">
                     测试
                   </el-button>
                   <el-button size="small" text @click="openEdit(profile)">编辑</el-button>
-                  <el-button size="small" text type="danger" @click="deleteProfile(profile)">
-                    删除
-                  </el-button>
+                  <el-button size="small" text type="danger" @click="deleteProfile(profile)"> 删除 </el-button>
                 </div>
               </div>
             </div>
@@ -474,8 +434,7 @@ DEEPSEEK_API_KEY=你的密钥
 DEEPSEEK_MODEL=deepseek-chat
 DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
               <p class="muted">
-                .env
-                是本地明文配置文件，不等同于系统凭据库；请勿提交到版本库。新增模型档案后将优先使用档案配置。
+                .env 是本地明文配置文件，不等同于系统凭据库；请勿提交到版本库。新增模型档案后将优先使用档案配置。
               </p>
             </div>
 
@@ -495,15 +454,9 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
           </header>
 
           <div class="actions">
-            <el-button size="small" :loading="pingLoading" @click="testMainProcess">
-              测试 Ping
-            </el-button>
-            <span v-if="pingResult" class="inline-status ok">
-              <span class="dot"></span>{{ pingResult }}
-            </span>
-            <span v-if="pingError" class="inline-status danger">
-              <span class="dot"></span>{{ pingError }}
-            </span>
+            <el-button size="small" :loading="pingLoading" @click="testMainProcess"> 测试 Ping </el-button>
+            <span v-if="pingResult" class="inline-status ok"> <span class="dot"></span>{{ pingResult }} </span>
+            <span v-if="pingError" class="inline-status danger"> <span class="dot"></span>{{ pingError }} </span>
           </div>
         </section>
 
@@ -520,9 +473,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
             <el-radio-button value="dark">深色</el-radio-button>
           </el-radio-group>
 
-          <p class="card-note">
-            浅色适合明亮环境，深色适合长时间编码。编辑器、代码高亮与 Diff 配色会同步切换。
-          </p>
+          <p class="card-note">浅色适合明亮环境，深色适合长时间编码。编辑器、代码高亮与 Diff 配色会同步切换。</p>
         </section>
 
         <section class="settings-card">
@@ -574,8 +525,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
           v-model="dialogVisible"
           :title="editingId ? '编辑模型' : '新增模型'"
           width="560px"
-          :close-on-click-modal="false"
-        >
+          :close-on-click-modal="false">
           <div class="model-form">
             <label class="form-row">
               <span>服务商预设</span>
@@ -584,8 +534,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
                   v-for="preset in MODEL_PROVIDER_PRESETS"
                   :key="preset.id"
                   :label="preset.label"
-                  :value="preset.id"
-                />
+                  :value="preset.id" />
               </el-select>
             </label>
 
@@ -611,8 +560,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
                 type="password"
                 show-password
                 autocomplete="off"
-                :placeholder="hasStoredKey ? '已保存，留空则保持不变' : '本地模型可留空'"
-              />
+                :placeholder="hasStoredKey ? '已保存，留空则保持不变' : '本地模型可留空'" />
             </label>
 
             <label class="form-row switch-row">
@@ -626,20 +574,9 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com</pre>
             的模型。预设值仅作参考，请以服务商文档为准。
           </p>
 
-          <div v-if="draftTestResult" class="inline-status ok">
-            <span class="dot"></span>{{ draftTestResult }}
-          </div>
-          <div v-if="draftTestError" class="inline-status danger">
-            <span class="dot"></span>{{ draftTestError }}
-          </div>
-          <el-alert
-            v-if="formError"
-            class="model-alert"
-            type="error"
-            :title="formError"
-            show-icon
-            :closable="false"
-          />
+          <div v-if="draftTestResult" class="inline-status ok"><span class="dot"></span>{{ draftTestResult }}</div>
+          <div v-if="draftTestError" class="inline-status danger"><span class="dot"></span>{{ draftTestError }}</div>
+          <el-alert v-if="formError" class="model-alert" type="error" :title="formError" show-icon :closable="false" />
 
           <template #footer>
             <div class="dialog-footer">

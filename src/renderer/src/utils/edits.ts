@@ -25,7 +25,7 @@ export function flattenEditFiles(sessions: EditSession[]): EditFileEntry[] {
 export function neighborEditEntry(
   entries: EditFileEntry[],
   currentKey: string | null,
-  offset: -1 | 1
+  offset: -1 | 1,
 ): EditFileEntry | null {
   if (!currentKey) return null
 

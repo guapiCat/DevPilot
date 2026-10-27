@@ -34,7 +34,7 @@ export const useChatStore = defineStore('chat', () => {
   let selectToken = 0
 
   const activeConversation = computed(
-    () => conversations.value.find((item) => item.id === activeConversationId.value) ?? null
+    () => conversations.value.find((item) => item.id === activeConversationId.value) ?? null,
   )
 
   const activeMessages = computed(() => {
@@ -43,7 +43,7 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   const isGeneratingInActiveConversation = computed(
-    () => isGenerating.value && generatingConversationId.value === activeConversationId.value
+    () => isGenerating.value && generatingConversationId.value === activeConversationId.value,
   )
 
   const canRetry = computed(() => retryConversationId.value !== null && !isGenerating.value)
@@ -56,11 +56,7 @@ export const useChatStore = defineStore('chat', () => {
     messagesByConversation.value[conversationId] = messages
   }
 
-  function patchMessage(
-    conversationId: string,
-    messageId: string,
-    patch: Partial<ChatMessage>
-  ): void {
+  function patchMessage(conversationId: string, messageId: string, patch: Partial<ChatMessage>): void {
     const messages = messagesOf(conversationId)
     const index = messages.findIndex((message) => message.id === messageId)
     if (index === -1) return
@@ -75,7 +71,7 @@ export const useChatStore = defineStore('chat', () => {
   function updateToolCalls(
     conversationId: string,
     messageId: string,
-    update: (calls: ToolCallRecord[]) => ToolCallRecord[]
+    update: (calls: ToolCallRecord[]) => ToolCallRecord[],
   ): void {
     const message = messagesOf(conversationId).find((item) => item.id === messageId)
     if (!message) return
@@ -86,10 +82,10 @@ export const useChatStore = defineStore('chat', () => {
     conversationId: string,
     messageId: string,
     status: ToolCallRecord['status'],
-    summary: string
+    summary: string,
   ): void {
     updateToolCalls(conversationId, messageId, (calls) =>
-      calls.map((call) => (call.status === 'running' ? { ...call, status, summary } : call))
+      calls.map((call) => (call.status === 'running' ? { ...call, status, summary } : call)),
     )
   }
 
@@ -115,13 +111,11 @@ export const useChatStore = defineStore('chat', () => {
     const run = pending
 
     if (event.type === 'text_delta') {
-      const message = messagesOf(run.conversationId).find(
-        (item) => item.id === run.assistantMessageId
-      )
+      const message = messagesOf(run.conversationId).find((item) => item.id === run.assistantMessageId)
       if (!message) return
       patchMessage(run.conversationId, run.assistantMessageId, {
         content: message.content + event.text,
-        status: 'streaming'
+        status: 'streaming',
       })
       return
     }
@@ -135,8 +129,8 @@ export const useChatStore = defineStore('chat', () => {
           argumentsSummary: event.argsSummary,
           status: 'running',
           summary: '',
-          durationMs: 0
-        }
+          durationMs: 0,
+        },
       ])
       return
     }
@@ -152,8 +146,8 @@ export const useChatStore = defineStore('chat', () => {
               argumentsSummary: '',
               status: event.status,
               summary: event.summary,
-              durationMs: event.durationMs
-            }
+              durationMs: event.durationMs,
+            },
           ]
         }
 
@@ -163,9 +157,9 @@ export const useChatStore = defineStore('chat', () => {
                 ...call,
                 status: event.status,
                 summary: event.summary,
-                durationMs: event.durationMs
+                durationMs: event.durationMs,
               }
-            : call
+            : call,
         )
       })
       return
@@ -180,8 +174,8 @@ export const useChatStore = defineStore('chat', () => {
       setMessages(
         run.conversationId,
         messagesOf(run.conversationId).map((item) =>
-          item.id === run.assistantMessageId ? event.assistantMessage : item
-        )
+          item.id === run.assistantMessageId ? event.assistantMessage : item,
+        ),
       )
       endRun(event.requestId)
       void refreshConversations()
@@ -197,14 +191,12 @@ export const useChatStore = defineStore('chat', () => {
 
     if (event.type !== 'error') return
 
-    const placeholder = messagesOf(run.conversationId).find(
-      (item) => item.id === run.assistantMessageId
-    )
+    const placeholder = messagesOf(run.conversationId).find((item) => item.id === run.assistantMessageId)
     const hasToolCalls = (placeholder?.toolCalls?.length ?? 0) > 0
     if (!placeholder || (!placeholder.content.trim() && !hasToolCalls)) {
       setMessages(
         run.conversationId,
-        messagesOf(run.conversationId).filter((item) => item.id !== run.assistantMessageId)
+        messagesOf(run.conversationId).filter((item) => item.id !== run.assistantMessageId),
       )
     } else {
       settleRunningToolCalls(run.conversationId, run.assistantMessageId, 'error', '请求失败')
@@ -275,10 +267,7 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const conversation = await desktopApi.chat.createConversation(repositoryId)
-      conversations.value = [
-        conversation,
-        ...conversations.value.filter((item) => item.id !== conversation.id)
-      ]
+      conversations.value = [conversation, ...conversations.value.filter((item) => item.id !== conversation.id)]
       messagesByConversation.value[conversation.id] = []
       activeConversationId.value = conversation.id
       useEditStore().reset()
@@ -366,14 +355,14 @@ export const useChatStore = defineStore('chat', () => {
       id: `local-user-${requestId}`,
       role: 'user',
       content: value,
-      createdAt
+      createdAt,
     }
     const assistantMessageId = `local-assistant-${requestId}`
 
     setMessages(conversation.id, [
       ...messagesOf(conversation.id),
       userMessage,
-      { id: assistantMessageId, role: 'assistant', content: '', createdAt, status: 'streaming' }
+      { id: assistantMessageId, role: 'assistant', content: '', createdAt, status: 'streaming' },
     ])
     beginRun({ requestId, conversationId: conversation.id, assistantMessageId })
 
@@ -381,15 +370,13 @@ export const useChatStore = defineStore('chat', () => {
       const result = await desktopApi.chat.send({
         requestId,
         conversationId: conversation.id,
-        content: value
+        content: value,
       })
       patchMessage(conversation.id, userMessage.id, result.userMessage)
     } catch (error) {
       setMessages(
         conversation.id,
-        messagesOf(conversation.id).filter(
-          (item) => item.id !== userMessage.id && item.id !== assistantMessageId
-        )
+        messagesOf(conversation.id).filter((item) => item.id !== userMessage.id && item.id !== assistantMessageId),
       )
       endRun(requestId)
       errorMessage.value = toErrorMessage(error)
@@ -409,7 +396,7 @@ export const useChatStore = defineStore('chat', () => {
     retryConversationId.value = null
     setMessages(conversationId, [
       ...messagesOf(conversationId),
-      { id: assistantMessageId, role: 'assistant', content: '', createdAt, status: 'streaming' }
+      { id: assistantMessageId, role: 'assistant', content: '', createdAt, status: 'streaming' },
     ])
     beginRun({ requestId, conversationId, assistantMessageId })
 
@@ -418,7 +405,7 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error) {
       setMessages(
         conversationId,
-        messagesOf(conversationId).filter((item) => item.id !== assistantMessageId)
+        messagesOf(conversationId).filter((item) => item.id !== assistantMessageId),
       )
       endRun(requestId)
       errorMessage.value = toErrorMessage(error)
@@ -465,6 +452,6 @@ export const useChatStore = defineStore('chat', () => {
     selectConversation,
     sendMessage,
     retryLast,
-    cancelGeneration
+    cancelGeneration,
   }
 })

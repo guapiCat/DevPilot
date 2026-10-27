@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch
-} from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Check, Close, Document, Files } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
@@ -39,7 +31,7 @@ const { activeConversationId } = storeToRefs(chat)
 const visibleSessions = computed(() =>
   activeRepository.value
     ? sessions.value.filter((session) => session.repositoryId === activeRepository.value?.id)
-    : sessions.value
+    : sessions.value,
 )
 
 const busy = computed(() => actionKey.value !== null)
@@ -49,9 +41,7 @@ const selectedVisible = computed(() => {
   return visibleSessions.value.some((session) => session.id === current.session.id) ? current : null
 })
 const selectedKey = computed(() =>
-  selectedVisible.value
-    ? editFileKey(selectedVisible.value.session.id, selectedVisible.value.file.id)
-    : null
+  selectedVisible.value ? editFileKey(selectedVisible.value.session.id, selectedVisible.value.file.id) : null,
 )
 
 const listRef = ref<HTMLElement | null>(null)
@@ -62,18 +52,15 @@ const currentIndex = computed(() => {
   return orderedEntries.value.findIndex((entry) => entry.key === selectedKey.value)
 })
 const canPrev = computed(() => currentIndex.value > 0)
-const canNext = computed(
-  () => currentIndex.value >= 0 && currentIndex.value < orderedEntries.value.length - 1
-)
+const canNext = computed(() => currentIndex.value >= 0 && currentIndex.value < orderedEntries.value.length - 1)
 
 const hiddenCount = computed(() =>
   activeRepository.value
     ? sessions.value.reduce(
-        (sum, session) =>
-          session.repositoryId === activeRepository.value?.id ? sum : sum + session.files.length,
-        0
+        (sum, session) => (session.repositoryId === activeRepository.value?.id ? sum : sum + session.files.length),
+        0,
       )
-    : 0
+    : 0,
 )
 
 function ensureVisibleSelection(): void {
@@ -88,7 +75,7 @@ watch(selectedKey, async () => {
   await nextTick()
   listRef.value?.querySelector<HTMLElement>('.proposal-item.active')?.scrollIntoView({
     block: 'nearest',
-    inline: 'nearest'
+    inline: 'nearest',
   })
 })
 
@@ -106,9 +93,7 @@ function neighborAfterCurrent(): { sessionId: string; fileId: string } | null {
 
 function isShortcutBlocked(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null
-  return Boolean(
-    target?.closest('input, textarea, select, [contenteditable="true"], .monaco-editor')
-  )
+  return Boolean(target?.closest('input, textarea, select, [contenteditable="true"], .monaco-editor'))
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -146,8 +131,8 @@ async function applySelected(): Promise<void> {
         {
           confirmButtonText: '覆盖并应用',
           cancelButtonText: '取消',
-          type: 'warning'
-        }
+          type: 'warning',
+        },
       )
     } catch {
       return
@@ -162,7 +147,7 @@ async function applySelected(): Promise<void> {
       operation: current.file.operation,
       hash: result.hash,
       size: result.size,
-      hadBom: result.hadBom
+      hadBom: result.hadBom,
     })
     ElMessage.success({ message: `已应用 ${current.file.relativePath}`, duration: 1500 })
   } catch (caught) {
@@ -188,8 +173,8 @@ async function rejectSelected(): Promise<void> {
       {
         confirmButtonText: '拒绝',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
+        type: 'warning',
+      },
     )
   } catch {
     return
@@ -234,14 +219,7 @@ async function rejectSelected(): Promise<void> {
 
       <template v-else>
         <div v-if="loading" class="list-refreshing">正在刷新…</div>
-        <el-alert
-          v-if="error"
-          class="list-inline-error"
-          :title="error"
-          type="error"
-          show-icon
-          :closable="false"
-        />
+        <el-alert v-if="error" class="list-inline-error" :title="error" type="error" show-icon :closable="false" />
 
         <div v-for="session in visibleSessions" :key="session.id" class="session-group">
           <div class="session-head">
@@ -256,11 +234,10 @@ async function rejectSelected(): Promise<void> {
             class="proposal-item"
             :class="{
               active: selectedKey === editFileKey(session.id, file.id),
-              stale: file.status === 'stale'
+              stale: file.status === 'stale',
             }"
             :title="file.relativePath"
-            @click="edits.select(session.id, file.id)"
-          >
+            @click="edits.select(session.id, file.id)">
             <span class="op-badge" :class="file.operation">
               {{ operationLabel(file.operation) }}
             </span>
@@ -294,8 +271,7 @@ async function rejectSelected(): Promise<void> {
               aria-label="上一个文件"
               title="上一个文件 (Alt+Shift+↑)"
               :disabled="!canPrev"
-              @click="selectNeighbor(-1)"
-            />
+              @click="selectNeighbor(-1)" />
             <span class="nav-position"> {{ currentIndex + 1 }} / {{ orderedEntries.length }} </span>
             <el-button
               text
@@ -304,8 +280,7 @@ async function rejectSelected(): Promise<void> {
               aria-label="下一个文件"
               title="下一个文件 (Alt+Shift+↓)"
               :disabled="!canNext"
-              @click="selectNeighbor(1)"
-            />
+              @click="selectNeighbor(1)" />
           </div>
 
           <div class="detail-actions">
@@ -313,8 +288,7 @@ async function rejectSelected(): Promise<void> {
               v-if="selectedVisible.file.operation === 'modify'"
               text
               size="small"
-              @click="emit('open', selectedVisible.file.relativePath)"
-            >
+              @click="emit('open', selectedVisible.file.relativePath)">
               打开文件
             </el-button>
             <el-button
@@ -323,13 +297,10 @@ async function rejectSelected(): Promise<void> {
               :icon="Check"
               :loading="actionKey === selectedKey"
               :disabled="busy || selectedVisible.file.status === 'stale'"
-              @click="applySelected"
-            >
+              @click="applySelected">
               应用
             </el-button>
-            <el-button size="small" :icon="Close" :disabled="busy" @click="rejectSelected">
-              拒绝
-            </el-button>
+            <el-button size="small" :icon="Close" :disabled="busy" @click="rejectSelected"> 拒绝 </el-button>
           </div>
         </div>
 
@@ -342,8 +313,7 @@ async function rejectSelected(): Promise<void> {
             :key="selectedKey ?? ''"
             :relative-path="selectedVisible.file.relativePath"
             :original-content="selectedVisible.file.originalContent ?? ''"
-            :proposed-content="selectedVisible.file.proposedContent"
-          />
+            :proposed-content="selectedVisible.file.proposedContent" />
           <template #fallback>
             <div class="diff-fallback">
               <el-skeleton :rows="6" animated />
@@ -357,8 +327,7 @@ async function rejectSelected(): Promise<void> {
         compact
         :icon="Document"
         title="选择一条修改建议"
-        description="在左侧选择文件后查看 AI 提议的差异，并逐项应用或拒绝。"
-      />
+        description="在左侧选择文件后查看 AI 提议的差异，并逐项应用或拒绝。" />
     </section>
   </div>
 </template>

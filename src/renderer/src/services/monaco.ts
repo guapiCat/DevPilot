@@ -43,10 +43,7 @@ import 'monaco-editor/languages/definitions/yaml/register'
 import 'monaco-editor/languages/features/css/register'
 import 'monaco-editor/languages/features/html/register'
 import 'monaco-editor/languages/features/json/register'
-import {
-  javascriptDefaults,
-  typescriptDefaults
-} from 'monaco-editor/languages/features/typescript/register'
+import { javascriptDefaults, typescriptDefaults } from 'monaco-editor/languages/features/typescript/register'
 
 import 'monaco-editor/editor/contrib/anchorSelect/browser/anchorSelect'
 import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching'
@@ -142,7 +139,7 @@ globalThis.MonacoEnvironment = {
       default:
         return new EditorWorker()
     }
-  }
+  },
 }
 
 monaco.editor.defineTheme('devpilot-light', {
@@ -167,8 +164,8 @@ monaco.editor.defineTheme('devpilot-light', {
     'editorHoverWidget.border': '#dde3ec',
     'scrollbarSlider.background': '#c3ccd966',
     'scrollbarSlider.hoverBackground': '#a9b5c599',
-    'scrollbarSlider.activeBackground': '#a9b5c5cc'
-  }
+    'scrollbarSlider.activeBackground': '#a9b5c5cc',
+  },
 })
 
 monaco.editor.defineTheme('devpilot-dark', {
@@ -192,18 +189,18 @@ monaco.editor.defineTheme('devpilot-dark', {
     'editorHoverWidget.border': '#2c313b',
     'scrollbarSlider.background': '#33394566',
     'scrollbarSlider.hoverBackground': '#41495799',
-    'scrollbarSlider.activeBackground': '#414957cc'
-  }
+    'scrollbarSlider.activeBackground': '#414957cc',
+  },
 })
 
 // 独立文件没有项目上下文，关闭语义校验，避免大量误报。
 typescriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
-  noSyntaxValidation: false
+  noSyntaxValidation: false,
 })
 javascriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
-  noSyntaxValidation: false
+  noSyntaxValidation: false,
 })
 
 export { monaco }

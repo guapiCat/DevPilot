@@ -18,7 +18,7 @@ watch(
   (id) => {
     selectedId.value = id
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const tooltip = computed(() => {
@@ -38,7 +38,7 @@ async function handleChange(value: string): Promise<void> {
     selectedId.value = status.activeProfileId ?? value
     ElMessage.success({
       message: `当前模型已切换为「${target?.name ?? value}」`,
-      duration: 1500
+      duration: 1500,
     })
   } catch (error) {
     selectedId.value = activeProfileId.value
@@ -59,14 +59,8 @@ async function handleChange(value: string): Promise<void> {
     :title="tooltip"
     :disabled="switching || isGenerating"
     :loading="switching"
-    @change="handleChange"
-  >
-    <el-option
-      v-for="profile in profiles"
-      :key="profile.id"
-      :label="profile.name"
-      :value="profile.id"
-    >
+    @change="handleChange">
+    <el-option v-for="profile in profiles" :key="profile.id" :label="profile.name" :value="profile.id">
       <span class="model-option">
         <span class="model-option-name">{{ profile.name }}</span>
         <span class="model-option-meta">
@@ -78,8 +72,7 @@ async function handleChange(value: string): Promise<void> {
   <span
     v-else-if="aiStatus?.configured && aiStatus.source === 'env'"
     class="model-chip"
-    title="当前使用 .env 配置；在设置页新增模型档案后可直接切换"
-  >
+    title="当前使用 .env 配置；在设置页新增模型档案后可直接切换">
     环境变量 · {{ aiStatus.model }}
   </span>
 </template>

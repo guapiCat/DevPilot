@@ -3,7 +3,7 @@ import {
   MAX_API_KEY_LENGTH,
   MAX_MODEL_BASE_URL_LENGTH,
   MAX_MODEL_ID_LENGTH,
-  MAX_MODEL_PROFILE_NAME_LENGTH
+  MAX_MODEL_PROFILE_NAME_LENGTH,
 } from '../constants/app'
 
 export const modelProviderKindSchema = z.enum(['deepseek', 'openai-compatible'])
@@ -30,11 +30,7 @@ export const modelBaseUrlSchema = z
   .max(MAX_MODEL_BASE_URL_LENGTH, 'Base URL 过长')
   .refine(isAllowedModelBaseUrl, 'Base URL 必须使用 https（本地 localhost 可用 http）')
 
-export const modelIdSchema = z
-  .string()
-  .trim()
-  .min(1, '模型 ID 不能为空')
-  .max(MAX_MODEL_ID_LENGTH, '模型 ID 过长')
+export const modelIdSchema = z.string().trim().min(1, '模型 ID 不能为空').max(MAX_MODEL_ID_LENGTH, '模型 ID 过长')
 
 const modelProfileNameSchema = z
   .string()
@@ -51,7 +47,7 @@ export const modelProfileInputSchema = z.strictObject({
   model: modelIdSchema,
   baseUrl: modelBaseUrlSchema,
   apiKey: apiKeySchema,
-  toolsEnabled: z.boolean()
+  toolsEnabled: z.boolean(),
 })
 
 export type ModelProfileInputPayload = z.infer<typeof modelProfileInputSchema>
@@ -61,13 +57,13 @@ export const testModelProfileInputSchema = z.strictObject({
   provider: modelProviderKindSchema,
   model: modelIdSchema,
   baseUrl: modelBaseUrlSchema,
-  apiKey: apiKeySchema
+  apiKey: apiKeySchema,
 })
 
 export type TestModelProfileInputPayload = z.infer<typeof testModelProfileInputSchema>
 
 export const modelProfileIdInputSchema = z.strictObject({
-  profileId: z.string().uuid('档案 ID 不合法')
+  profileId: z.string().uuid('档案 ID 不合法'),
 })
 
 export type ModelProfileIdInputPayload = z.infer<typeof modelProfileIdInputSchema>

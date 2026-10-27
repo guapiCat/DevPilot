@@ -107,19 +107,19 @@ describe('list_files 工具', () => {
 
   it('拒绝路径穿越与绝对路径', async () => {
     await expect(tool.execute({ path: '../outside' }, context)).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
     await expect(tool.execute({ path: 'C:\\Windows' }, context)).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
   })
 
   it('目标不是目录时返回 UNSUPPORTED_FILE，缺失目录返回 FILE_NOT_FOUND', async () => {
     await expect(tool.execute({ path: 'README.md' }, context)).rejects.toMatchObject({
-      code: 'UNSUPPORTED_FILE'
+      code: 'UNSUPPORTED_FILE',
     })
     await expect(tool.execute({ path: 'missing' }, context)).rejects.toMatchObject({
-      code: 'FILE_NOT_FOUND'
+      code: 'FILE_NOT_FOUND',
     })
   })
 

@@ -1,21 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import {
-  ToolExecutionError,
-  ToolRegistry,
-  type ToolContext,
-  type ToolResult
-} from '@main/ai/tools/tool-registry'
+import { ToolExecutionError, ToolRegistry, type ToolContext, type ToolResult } from '@main/ai/tools/tool-registry'
 
 const context: ToolContext = {
   repositoryId: 'repo-1',
-  signal: new AbortController().signal
+  signal: new AbortController().signal,
 }
 
 type ExecuteFn = (args: Record<string, unknown>, context: ToolContext) => Promise<ToolResult>
 
 function createRegistry(
-  execute: ExecuteFn = vi.fn(async () => ({ content: 'ok', summary: '完成', truncated: false }))
+  execute: ExecuteFn = vi.fn(async () => ({ content: 'ok', summary: '完成', truncated: false })),
 ): { registry: ToolRegistry; execute: ExecuteFn } {
   const registry = new ToolRegistry()
   registry.register({
@@ -23,10 +18,10 @@ function createRegistry(
     description: '读取文件',
     schema: z.strictObject({
       path: z.string().min(1),
-      startLine: z.number().int().min(1).optional()
+      startLine: z.number().int().min(1).optional(),
     }),
     summarizeArgs: (args) => `读取 ${args.path}`,
-    execute
+    execute,
   })
   return { registry, execute }
 }
@@ -43,9 +38,9 @@ describe('ToolRegistry', () => {
       type: 'object',
       properties: {
         path: { type: 'string' },
-        startLine: { type: 'integer' }
+        startLine: { type: 'integer' },
       },
-      required: ['path']
+      required: ['path'],
     })
   })
 
@@ -57,8 +52,8 @@ describe('ToolRegistry', () => {
         description: 'again',
         schema: z.strictObject({ path: z.string() }),
         summarizeArgs: () => 'x',
-        execute: async () => ({ content: '', summary: '', truncated: false })
-      })
+        execute: async () => ({ content: '', summary: '', truncated: false }),
+      }),
     ).toThrow(/重复注册/)
   })
 
@@ -66,7 +61,7 @@ describe('ToolRegistry', () => {
     const { registry } = createRegistry()
     await expect(registry.execute('nope', {}, context)).rejects.toMatchObject({
       name: 'ToolExecutionError',
-      code: 'UNKNOWN_TOOL'
+      code: 'UNKNOWN_TOOL',
     })
   })
 
@@ -74,11 +69,9 @@ describe('ToolRegistry', () => {
     const { registry, execute } = createRegistry()
 
     for (const args of [{}, { path: 42 }, { path: 'a.ts', extra: true }]) {
-      await expect(registry.execute('read_file', args, context)).rejects.toBeInstanceOf(
-        ToolExecutionError
-      )
+      await expect(registry.execute('read_file', args, context)).rejects.toBeInstanceOf(ToolExecutionError)
       await expect(registry.execute('read_file', args, context)).rejects.toMatchObject({
-        code: 'INVALID_ARGUMENTS'
+        code: 'INVALID_ARGUMENTS',
       })
     }
     expect(execute).not.toHaveBeenCalled()

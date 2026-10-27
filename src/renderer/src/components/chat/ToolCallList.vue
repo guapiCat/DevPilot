@@ -12,7 +12,7 @@ const TOOL_LABELS: Record<string, string> = {
   search_code: '搜索代码',
   get_git_status: 'Git 状态',
   get_git_diff: 'Git 差异',
-  propose_file_edit: '生成修改建议'
+  propose_file_edit: '生成修改建议',
 }
 
 const STATUS_LABELS: Record<ToolCallStatus, string> = {
@@ -21,15 +21,14 @@ const STATUS_LABELS: Record<ToolCallStatus, string> = {
   error: '失败',
   blocked: '已阻止',
   timeout: '超时',
-  cancelled: '已停止'
+  cancelled: '已停止',
 }
 
 const runningCount = computed(() => props.calls.filter((call) => call.status === 'running').length)
 const failedCount = computed(
   () =>
-    props.calls.filter(
-      (call) => call.status === 'error' || call.status === 'timeout' || call.status === 'blocked'
-    ).length
+    props.calls.filter((call) => call.status === 'error' || call.status === 'timeout' || call.status === 'blocked')
+      .length,
 )
 
 const summaryText = computed(() => {

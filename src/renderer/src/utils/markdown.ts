@@ -57,7 +57,7 @@ const languages = {
   swift,
   typescript,
   xml,
-  yaml
+  yaml,
 }
 
 for (const [name, definition] of Object.entries(languages)) {
@@ -65,11 +65,7 @@ for (const [name, definition] of Object.entries(languages)) {
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 const markdown = new MarkdownIt({
@@ -84,7 +80,7 @@ const markdown = new MarkdownIt({
       try {
         const highlighted = hljs.highlight(code, {
           language,
-          ignoreIllegals: true
+          ignoreIllegals: true,
         }).value
         return `<pre class="md-code"><code class="hljs language-${languageClass}">${highlighted}</code></pre>`
       } catch {
@@ -93,7 +89,7 @@ const markdown = new MarkdownIt({
     }
 
     return `<pre class="md-code"><code class="hljs">${escapeHtml(code)}</code></pre>`
-  }
+  },
 })
 
 const defaultLinkOpen =

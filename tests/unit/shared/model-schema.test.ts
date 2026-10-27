@@ -4,7 +4,7 @@ import {
   modelBaseUrlSchema,
   modelProfileIdInputSchema,
   modelProfileInputSchema,
-  testModelProfileInputSchema
+  testModelProfileInputSchema,
 } from '@shared/schemas/model'
 
 const VALID_PROFILE = {
@@ -13,7 +13,7 @@ const VALID_PROFILE = {
   model: 'deepseek-chat',
   baseUrl: 'https://api.deepseek.com',
   apiKey: 'sk-test-only',
-  toolsEnabled: true
+  toolsEnabled: true,
 }
 
 describe('Base URL 规则', () => {
@@ -34,13 +34,9 @@ describe('Base URL 规则', () => {
   })
 
   it('schema 去除首尾空白并校验长度', () => {
-    expect(modelBaseUrlSchema.parse('  https://api.example.com/v1  ')).toBe(
-      'https://api.example.com/v1'
-    )
+    expect(modelBaseUrlSchema.parse('  https://api.example.com/v1  ')).toBe('https://api.example.com/v1')
     expect(modelBaseUrlSchema.safeParse('').success).toBe(false)
-    expect(modelBaseUrlSchema.safeParse(`https://example.com/${'a'.repeat(2048)}`).success).toBe(
-      false
-    )
+    expect(modelBaseUrlSchema.safeParse(`https://example.com/${'a'.repeat(2048)}`).success).toBe(false)
   })
 })
 
@@ -49,7 +45,7 @@ describe('modelProfileInputSchema', () => {
     const result = modelProfileInputSchema.parse({
       ...VALID_PROFILE,
       name: '  DeepSeek  ',
-      apiKey: '  sk-test-only  '
+      apiKey: '  sk-test-only  ',
     })
 
     expect(result.name).toBe('DeepSeek')
@@ -57,30 +53,18 @@ describe('modelProfileInputSchema', () => {
   })
 
   it('允许省略 apiKey 与 id', () => {
-    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, apiKey: undefined }).success).toBe(
-      true
-    )
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, apiKey: undefined }).success).toBe(true)
   })
 
   it('拒绝未知 provider 与超出长度的字段', () => {
-    expect(
-      modelProfileInputSchema.safeParse({ ...VALID_PROFILE, provider: 'anthropic' }).success
-    ).toBe(false)
-    expect(
-      modelProfileInputSchema.safeParse({ ...VALID_PROFILE, name: 'a'.repeat(41) }).success
-    ).toBe(false)
-    expect(
-      modelProfileInputSchema.safeParse({ ...VALID_PROFILE, model: 'm'.repeat(121) }).success
-    ).toBe(false)
-    expect(
-      modelProfileInputSchema.safeParse({ ...VALID_PROFILE, apiKey: 'k'.repeat(4097) }).success
-    ).toBe(false)
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, provider: 'anthropic' }).success).toBe(false)
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, name: 'a'.repeat(41) }).success).toBe(false)
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, model: 'm'.repeat(121) }).success).toBe(false)
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, apiKey: 'k'.repeat(4097) }).success).toBe(false)
   })
 
   it('id 必须为 uuid，且拒绝多余字段', () => {
-    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, id: 'not-a-uuid' }).success).toBe(
-      false
-    )
+    expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, id: 'not-a-uuid' }).success).toBe(false)
     expect(modelProfileInputSchema.safeParse({ ...VALID_PROFILE, extra: true }).success).toBe(false)
   })
 })
@@ -90,14 +74,14 @@ describe('testModelProfileInputSchema', () => {
     const base = {
       provider: 'openai-compatible',
       model: 'qwen-plus',
-      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     }
 
     expect(
       testModelProfileInputSchema.safeParse({
         ...base,
-        profileId: '11111111-1111-4111-8111-111111111111'
-      }).success
+        profileId: '11111111-1111-4111-8111-111111111111',
+      }).success,
     ).toBe(true)
     expect(testModelProfileInputSchema.safeParse({ ...base, apiKey: 'sk-test' }).success).toBe(true)
   })
@@ -108,8 +92,8 @@ describe('testModelProfileInputSchema', () => {
         profileId: 'bad',
         provider: 'deepseek',
         model: 'deepseek-chat',
-        baseUrl: 'https://api.deepseek.com'
-      }).success
+        baseUrl: 'https://api.deepseek.com',
+      }).success,
     ).toBe(false)
   })
 })
@@ -118,8 +102,8 @@ describe('modelProfileIdInputSchema', () => {
   it('要求 uuid', () => {
     expect(
       modelProfileIdInputSchema.safeParse({
-        profileId: '11111111-1111-4111-8111-111111111111'
-      }).success
+        profileId: '11111111-1111-4111-8111-111111111111',
+      }).success,
     ).toBe(true)
     expect(modelProfileIdInputSchema.safeParse({ profileId: 'bad' }).success).toBe(false)
   })

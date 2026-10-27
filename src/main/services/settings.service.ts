@@ -1,8 +1,4 @@
-import {
-  AI_CONFIG_ENV,
-  DEFAULT_DEEPSEEK_BASE_URL,
-  DEFAULT_DEEPSEEK_MODEL
-} from '@shared/constants/app'
+import { AI_CONFIG_ENV, DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL } from '@shared/constants/app'
 
 export type EnvLike = Record<string, string | undefined>
 
@@ -27,7 +23,7 @@ export function readAiConfigValues(env: EnvLike): ResolvedAiConfig | null {
     apiKey,
     model: env[AI_CONFIG_ENV.model]?.trim() || DEFAULT_DEEPSEEK_MODEL,
     baseUrl: env[AI_CONFIG_ENV.baseUrl]?.trim() || DEFAULT_DEEPSEEK_BASE_URL,
-    toolsEnabled: true
+    toolsEnabled: true,
   }
 }
 

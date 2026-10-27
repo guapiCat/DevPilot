@@ -17,7 +17,7 @@ const {
   activeConversationId,
   isCreatingConversation,
   generatingConversationId,
-  deletingConversationId
+  deletingConversationId,
 } = storeToRefs(chat)
 const { activeRepository } = storeToRefs(repository)
 
@@ -52,8 +52,8 @@ async function handleRemove(id: string): Promise<void> {
       {
         confirmButtonText: '删除',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
+        type: 'warning',
+      },
     )
   } catch {
     return
@@ -69,8 +69,8 @@ async function handleRemove(id: string): Promise<void> {
       <div>
         <h1>研发对话</h1>
         <p>
-          可读取当前关联仓库的文件与搜索片段，内容会发送到云端模型；AI
-          提出的修改只会生成待审核建议，需在工作区 Diff 面板确认后才会写入。
+          可读取当前关联仓库的文件与搜索片段，内容会发送到云端模型；AI 提出的修改只会生成待审核建议，需在工作区 Diff
+          面板确认后才会写入。
         </p>
       </div>
 
@@ -89,8 +89,7 @@ async function handleRemove(id: string): Promise<void> {
         :deleting-id="deletingConversationId"
         @create="handleCreate"
         @select="handleSelect"
-        @remove="handleRemove"
-      />
+        @remove="handleRemove" />
 
       <section class="chat-main">
         <ChatPanel :repository-id="activeRepository?.id ?? null" />

@@ -41,8 +41,8 @@ function ensureEditor(): monaco.editor.IStandaloneDiffEditor | null {
       scrollbar: {
         verticalScrollbarSize: 10,
         horizontalScrollbarSize: 10,
-        useShadows: false
-      }
+        useShadows: false,
+      },
     })
 
     diffListener = editor.onDidUpdateDiff(() => {
@@ -66,12 +66,12 @@ function updateModels(): void {
   const nextOriginal = monaco.editor.createModel(
     props.originalContent,
     language,
-    monaco.Uri.parse(`devpilot-edit://original/${version}/${encodedPath}`)
+    monaco.Uri.parse(`devpilot-edit://original/${version}/${encodedPath}`),
   )
   const nextModified = monaco.editor.createModel(
     props.proposedContent,
     language,
-    monaco.Uri.parse(`devpilot-edit://modified/${version}/${encodedPath}`)
+    monaco.Uri.parse(`devpilot-edit://modified/${version}/${encodedPath}`),
   )
 
   const previous = editor.getModel()
@@ -88,9 +88,7 @@ function reveal(direction: 'next' | 'previous'): void {
 
 function isShortcutBlocked(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null
-  return Boolean(
-    target?.closest('input, textarea, select, [contenteditable="true"], .monaco-editor')
-  )
+  return Boolean(target?.closest('input, textarea, select, [contenteditable="true"], .monaco-editor'))
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -110,7 +108,7 @@ watch(
   () => [props.relativePath, props.originalContent, props.proposedContent],
   () => {
     updateModels()
-  }
+  },
 )
 
 onMounted(() => {
@@ -146,8 +144,7 @@ onBeforeUnmount(() => {
           aria-label="上一处变更"
           title="上一处变更 (Alt+↑)"
           :disabled="!changeCount"
-          @click="reveal('previous')"
-        />
+          @click="reveal('previous')" />
         <el-button
           text
           size="small"
@@ -155,8 +152,7 @@ onBeforeUnmount(() => {
           aria-label="下一处变更"
           title="下一处变更 (Alt+↓)"
           :disabled="!changeCount"
-          @click="reveal('next')"
-        />
+          @click="reveal('next')" />
       </div>
     </div>
     <div ref="host" class="proposal-diff-editor" aria-label="修改建议差异"></div>

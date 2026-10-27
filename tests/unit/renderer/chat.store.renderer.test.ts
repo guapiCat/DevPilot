@@ -4,17 +4,17 @@ import type { AiConfigStatus } from '@shared/types/app'
 
 const mocks = vi.hoisted(() => ({
   getAiConfigStatus: vi.fn(),
-  activateModelProfile: vi.fn()
+  activateModelProfile: vi.fn(),
 }))
 
 vi.mock('@renderer/services/desktop-api', () => ({
   desktopApi: {
     settings: {
       getAiConfigStatus: mocks.getAiConfigStatus,
-      activateModelProfile: mocks.activateModelProfile
+      activateModelProfile: mocks.activateModelProfile,
     },
-    chat: {}
-  }
+    chat: {},
+  },
 }))
 
 import { useChatStore } from '@renderer/stores/chat'
@@ -38,7 +38,7 @@ function makeStatus(overrides: Partial<AiConfigStatus> = {}): AiConfigStatus {
         toolsEnabled: true,
         hasApiKey: true,
         isActive: true,
-        updatedAt: '2026-10-23T00:00:00.000Z'
+        updatedAt: '2026-10-23T00:00:00.000Z',
       },
       {
         id: 'profile-b',
@@ -49,12 +49,12 @@ function makeStatus(overrides: Partial<AiConfigStatus> = {}): AiConfigStatus {
         toolsEnabled: false,
         hasApiKey: false,
         isActive: false,
-        updatedAt: '2026-10-23T00:00:00.000Z'
-      }
+        updatedAt: '2026-10-23T00:00:00.000Z',
+      },
     ],
     envConfigured: true,
     secretStorageAvailable: true,
-    ...overrides
+    ...overrides,
   }
 }
 
@@ -86,7 +86,7 @@ describe('chat store 模型配置', () => {
   it('未配置时 aiConfigured 为 false', async () => {
     const store = useChatStore()
     mocks.getAiConfigStatus.mockResolvedValue(
-      makeStatus({ configured: false, source: 'none', activeProfileId: null, profiles: [] })
+      makeStatus({ configured: false, source: 'none', activeProfileId: null, profiles: [] }),
     )
 
     await store.loadAiConfig()
@@ -116,7 +116,7 @@ describe('chat store 模型配置', () => {
       model: 'qwen2.5:7b',
       provider: 'openai-compatible',
       baseUrl: 'http://127.0.0.1:11434/v1',
-      toolsEnabled: false
+      toolsEnabled: false,
     })
     mocks.activateModelProfile.mockResolvedValue(switched)
 

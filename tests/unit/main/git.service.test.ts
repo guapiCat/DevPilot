@@ -31,7 +31,7 @@ function runGit(cwd: string, args: string[]): Promise<GitResult> {
     const child = spawn('git', ['-c', 'core.autocrlf=false', ...args], {
       cwd,
       windowsHide: true,
-      shell: false
+      shell: false,
     })
     let stdout = ''
     let stderr = ''
@@ -98,8 +98,8 @@ describe('GitService.getStatus', () => {
       expect.objectContaining({
         relativePath: 'file.txt',
         status: 'modified',
-        staged: false
-      })
+        staged: false,
+      }),
     )
   })
 
@@ -113,8 +113,8 @@ describe('GitService.getStatus', () => {
       expect.objectContaining({
         relativePath: 'added.txt',
         status: 'added',
-        staged: true
-      })
+        staged: true,
+      }),
     )
   })
 
@@ -127,8 +127,8 @@ describe('GitService.getStatus', () => {
       expect.objectContaining({
         relativePath: 'untracked.txt',
         status: 'untracked',
-        staged: false
-      })
+        staged: false,
+      }),
     )
   })
 
@@ -142,7 +142,7 @@ describe('GitService.getStatus', () => {
     expect(change).toMatchObject({
       status: 'renamed',
       oldRelativePath: 'file.txt',
-      staged: true
+      staged: true,
     })
   })
 
@@ -151,13 +151,13 @@ describe('GitService.getStatus', () => {
     const plainRepository = await repositories.register(plainPath)
 
     await expect(service.getStatus(plainRepository.id)).rejects.toMatchObject({
-      code: 'NOT_A_GIT_REPOSITORY'
+      code: 'NOT_A_GIT_REPOSITORY',
     })
   })
 
   it('未登记的仓库返回 REPOSITORY_NOT_FOUND', async () => {
     await expect(service.getStatus('00000000-0000-4000-8000-000000000000')).rejects.toMatchObject({
-      code: 'REPOSITORY_NOT_FOUND'
+      code: 'REPOSITORY_NOT_FOUND',
     })
   })
 })
@@ -219,13 +219,13 @@ describe('GitService.getDiff', () => {
 
   it('拒绝路径穿越', async () => {
     await expect(service.getDiff(repositoryId, '../outside.txt')).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
   })
 
   it('未登记的仓库返回 REPOSITORY_NOT_FOUND', async () => {
-    await expect(
-      service.getDiff('00000000-0000-4000-8000-000000000000', 'file.txt')
-    ).rejects.toMatchObject({ code: 'REPOSITORY_NOT_FOUND' })
+    await expect(service.getDiff('00000000-0000-4000-8000-000000000000', 'file.txt')).rejects.toMatchObject({
+      code: 'REPOSITORY_NOT_FOUND',
+    })
   })
 })

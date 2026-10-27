@@ -100,7 +100,9 @@
 - 仓库根目录只从 `RepositoryService` 的已登记记录读取，Diff 相对路径先通过安全校验。
 - Renderer 的 Git UI 状态集中在 `repository` Store，使用请求令牌丢弃切换仓库后的过期响应。
 
-**影响**：运行环境必须安装 Git 并位于 PATH，未安装时返回 `GIT_NOT_AVAILABLE`。不做任何写操作；暂存、提交、分支切换与 AI Diff 审核留待后续阶段。Diff 视图为纯文本统一 Diff，Monaco Diff Editor 在阶段 6 评估。
+**影响**：运行环境必须安装 Git 并位于 PATH，未安装时返回 `GIT_NOT_AVAILABLE`。本阶段不做任何写操作；暂存、提交、分支切换与 AI Diff 审核留待后续阶段。Diff 视图为纯文本统一 Diff，Monaco Diff Editor 在阶段 6 评估。
+
+> 后续变更：ADR-018 在只读能力之上增加用户发起的 Git 写操作与源代码管理页；Git 仍通过系统 CLI、AI 工具仍保持只读。
 
 ## ADR-011：使用 SQLite + better-sqlite3 做本地持久化
 
@@ -246,3 +248,21 @@
 - Windows 未开启开发者模式时，`winCodeSign` 压缩包内的 macOS 符号链接无法解压；README 记录开启开发者模式或预置缓存的替代步骤。
 
 **影响**：`npm run build:win` 产出 `dist/DevPilot-<version>-setup.exe`；`npm run pack:win` 产出免安装目录。打包后已验证 better-sqlite3（SQLite 3.53.4）与内置 ripgrep（15.0.0）可用。安装包未签名；当前 electron-builder 版本与 npm 6 的依赖收集行为绑定，升级 npm 或 electron-builder 时需重新验证依赖收集与原生模块。
+
+## ADR-018：用户发起的 Git 写操作与源代码管理页
+
+**背景**：ADR-010 只提供只读 status/diff，用户仍需在外部终端完成暂存、提交、分支切换与远程同步。阶段 8 希望把这些日常操作收进应用，同时保持“AI 不能自动改动仓库”的边界。候选方案包括引入 Git 库（isomorphic-git / NodeGit）或继续调用系统 Git CLI。
+
+**决策**：
+
+- 继续使用系统 Git CLI：`spawn('git', args, { cwd, windowsHide: true, shell: false })` 固定参数数组，不引入 Git 库，也不把 Git 数据写入数据库。
+- 新增独立“源代码管理”页与路由/导航，承载暂存/取消暂存、提交、提交历史与单次提交 Diff、本地分支列表/新建/切换、fetch/pull/push。
+- 写操作只由用户在该页面触发；确认仅用于有风险操作（分离 HEAD 提交、脏工作区切分支、pull、push），真正的保障来自主进程固定参数。
+- 命令白名单：`add`、`restore --staged` / `rm --cached`（unborn）、`commit -m`（禁用签名、不 `-a`）、`branch` / `switch`、`fetch`、`pull --ff-only`、`push`。不提供 reset、clean、amend、rebase、stash、force、删除分支或远端。
+- 所有输入在 IPC 层用 Zod 校验，服务层再次校验；仓库根目录只来自 `RepositoryService`。路径使用 `isSafeGitPath` + `--literal-pathspecs` + `--`；分支名使用 `isSafeBranchName`；提交信息限制长度、拒绝空字符与 NUL；SHA 只接受 40/64 位小写十六进制；remote 名只接受 `[A-Za-z0-9._-]`。
+- 网络命令禁用交互式凭据提示（`GIT_TERMINAL_PROMPT=0`、`GCM_INTERACTIVE=never`、`SSH_ASKPASS_REQUIRE=never`），协议限制为 `https:ssh:file`；本地写 30 秒、网络 60 秒超时。
+- Git 错误由 `classifyGitFailure` 映射为固定中文错误码与消息，不把 stderr 原文返回渲染层或写入日志（日志只记录 operation / exitCode / code）。
+- 写成功后刷新 status/分支/历史/远程状态；切分支或 pull 后重新加载文件树并清空工作区打开标签，存在未保存修改时先确认。
+- AI 工具保持只读：不新增任何 AI Git 写工具，`propose_file_edit` 仍只创建待审核提案。
+
+**影响**：用户可以在应用内完成常见 Git 工作流，但无法通过 UI 执行破坏性操作。分离 HEAD 允许提交但无法 push/pull；unborn 仓库支持首次提交与 `rm --cached` 取消暂存；合并提交的单次 Diff 以 first-parent 展示，重命名依赖 diff-tree 的 `-M` 检测。hooks 照常运行且不可跳过，私有远端凭据需提前在系统凭据管理器中配置。Git 历史、Diff 与远程同步状态全部按需读取，不进入 SQLite。源代码管理页与工作区共用 `repository` store 的 Git 状态，并通过独立 `git` store 管理分支、历史、提交详情与远程状态。

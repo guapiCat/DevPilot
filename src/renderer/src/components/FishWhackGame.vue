@@ -6,7 +6,7 @@ import {
   FISH_HITS_TO_WIN,
   pickFishJump,
   type FishBounds,
-  type FishPoint
+  type FishPoint,
 } from '@renderer/utils/fish-game'
 
 type GameMode = 'idle' | 'playing' | 'celebrating'
@@ -42,7 +42,7 @@ const BURST_POINTS: Array<[number, number]> = [
   [0.72, 0.32],
   [0.38, 0.48],
   [0.62, 0.52],
-  [0.82, 0.58]
+  [0.82, 0.58],
 ]
 
 const mode = ref<GameMode>('idle')
@@ -58,7 +58,7 @@ const fishBody = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 
 const fishStyle = computed(() => ({
-  transform: `translate3d(${Math.round(fish.value.x)}px, ${Math.round(fish.value.y)}px, 0)`
+  transform: `translate3d(${Math.round(fish.value.x)}px, ${Math.round(fish.value.y)}px, 0)`,
 }))
 const ariaLabel = computed(() => {
   if (mode.value === 'idle') return '摸鱼小游戏：拖动 DeepSeek 娘可移动位置，双击开始'
@@ -95,7 +95,7 @@ function viewportBounds(size: number): FishBounds {
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
     fishSize: size,
-    margin: 16
+    margin: 16,
   }
 }
 
@@ -104,10 +104,7 @@ function restingPoint(size: number): FishPoint {
   const rect = sidebar?.getBoundingClientRect()
   const left = rect?.left ?? 0
   const width = rect?.width ?? SIDEBAR_WIDTH
-  return clampFishPosition(
-    { x: left + (width - size) / 2, y: window.innerHeight - size - 64 },
-    viewportBounds(size)
-  )
+  return clampFishPosition({ x: left + (width - size) / 2, y: window.innerHeight - size - 64 }, viewportBounds(size))
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -116,7 +113,7 @@ function onPointerDown(event: PointerEvent): void {
     pointerX: event.clientX,
     pointerY: event.clientY,
     fishX: fish.value.x,
-    fishY: fish.value.y
+    fishY: fish.value.y,
   }
   dragMoved = false
   const target = event.currentTarget as HTMLElement
@@ -131,10 +128,7 @@ function onPointerMove(event: PointerEvent): void {
 
   dragMoved = true
   isDragging.value = true
-  fish.value = clampFishPosition(
-    { x: dragOrigin.fishX + dx, y: dragOrigin.fishY + dy },
-    viewportBounds(IDLE_SIZE)
-  )
+  fish.value = clampFishPosition({ x: dragOrigin.fishX + dx, y: dragOrigin.fishY + dy }, viewportBounds(IDLE_SIZE))
 }
 
 function finishDrag(event: PointerEvent): void {
@@ -199,9 +193,9 @@ function onFishClick(event: MouseEvent): void {
     [
       { transform: 'scale(1.14, 0.84) rotate(-3deg)' },
       { transform: 'scale(0.95, 1.07) rotate(2deg)' },
-      { transform: 'scale(1, 1) rotate(0deg)' }
+      { transform: 'scale(1, 1) rotate(0deg)' },
     ],
-    { duration: 320, easing: 'cubic-bezier(0.3, 0.9, 0.4, 1)' }
+    { duration: 320, easing: 'cubic-bezier(0.3, 0.9, 0.4, 1)' },
   )
 
   if (hits.value >= FISH_HITS_TO_WIN) {
@@ -288,7 +282,7 @@ function spawnBurst(x: number, y: number, count = 52): void {
       life: 1,
       decay: 0.011 + Math.random() * 0.009,
       size: 1.4 + Math.random() * 1.6,
-      color: Math.random() < 0.18 ? '#ffffff' : color
+      color: Math.random() < 0.18 ? '#ffffff' : color,
     })
   }
 }
@@ -370,7 +364,7 @@ function startFireworks(): void {
     burstTimers.push(
       window.setTimeout(() => {
         spawnBurst(window.innerWidth * xRatio, window.innerHeight * yRatio)
-      }, index * 170)
+      }, index * 170),
     )
   })
   rafId = requestAnimationFrame(tick)
@@ -411,12 +405,7 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <div class="fish-layer">
-      <canvas
-        v-show="mode === 'celebrating'"
-        ref="canvas"
-        class="fireworks"
-        aria-hidden="true"
-      ></canvas>
+      <canvas v-show="mode === 'celebrating'" ref="canvas" class="fireworks" aria-hidden="true"></canvas>
 
       <button
         type="button"
@@ -426,7 +415,7 @@ onBeforeUnmount(() => {
         :class="{
           'is-playing': mode === 'playing',
           'is-celebrating': mode === 'celebrating',
-          'is-dragging': isDragging
+          'is-dragging': isDragging,
         }"
         :style="fishStyle"
         :aria-label="ariaLabel"
@@ -435,8 +424,7 @@ onBeforeUnmount(() => {
         @pointerup="finishDrag"
         @pointercancel="finishDrag"
         @click.stop="onFishClick"
-        @dblclick.stop="startGame"
-      >
+        @dblclick.stop="startGame">
         <span class="facing" :style="{ transform: `scaleX(${facing})` }">
           <span ref="fishBody" class="fish-body">
             <img class="maid" :src="maidUrl" alt="" draggable="false" />
@@ -452,9 +440,7 @@ onBeforeUnmount(() => {
           >打地鼠 <strong>{{ hits }}</strong> / {{ FISH_HITS_TO_WIN }}</span
         >
         <span class="hud-divider"></span>
-        <button type="button" class="hud-close" aria-label="结束游戏" @click="stopGame">
-          结束 <kbd>Esc</kbd>
-        </button>
+        <button type="button" class="hud-close" aria-label="结束游戏" @click="stopGame">结束 <kbd>Esc</kbd></button>
       </div>
 
       <div v-if="mode === 'celebrating'" class="banner">

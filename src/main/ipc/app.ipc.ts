@@ -14,9 +14,9 @@ export function registerAppIpcHandlers(): void {
         electronVersion: process.versions.electron ?? 'unknown',
         chromeVersion: process.versions.chrome ?? 'unknown',
         nodeVersion: process.versions.node,
-        userDataPath: app.getPath('userData')
-      })
-    )
+        userDataPath: app.getPath('userData'),
+      }),
+    ),
   )
 
   ipcMain.handle(IPC_CHANNELS.appPing, (_event, input: unknown) => {

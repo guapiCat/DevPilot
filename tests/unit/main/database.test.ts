@@ -27,7 +27,7 @@ function open(): Database.Database {
 function tableNames(instance: Database.Database): string[] {
   return instance
     .prepare<[], { name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
     )
     .all()
     .map((row) => row.name)
@@ -62,12 +62,12 @@ describe('openDatabase', () => {
       'file_edits',
       'messages',
       'model_profiles',
-      'repositories'
+      'repositories',
     ])
 
     const indexes = db
       .prepare<[], { name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name"
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
       )
       .all()
       .map((row) => row.name)
@@ -80,7 +80,7 @@ describe('openDatabase', () => {
       'idx_messages_conversation',
       'idx_model_profiles_updated_at',
       'idx_repositories_updated_at',
-      'ux_model_profiles_active'
+      'ux_model_profiles_active',
     ])
   })
 
@@ -96,11 +96,11 @@ describe('openDatabase', () => {
   it('从 v1 升级到最新版本保留已有消息', () => {
     db.prepare(
       `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
-       VALUES ('c1', NULL, 'demo', 'now', 'now')`
+       VALUES ('c1', NULL, 'demo', 'now', 'now')`,
     ).run()
     db.prepare(
       `INSERT INTO messages (id, conversation_id, role, content, created_at)
-       VALUES ('m1', 'c1', 'user', 'hello', 'now')`
+       VALUES ('m1', 'c1', 'user', 'hello', 'now')`,
     ).run()
 
     db.exec('ALTER TABLE messages DROP COLUMN tool_calls;')
@@ -114,13 +114,13 @@ describe('openDatabase', () => {
     const upgraded = open()
     expect(upgraded.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(upgraded.prepare('SELECT content FROM messages WHERE id = ?').get('m1')).toEqual({
-      content: 'hello'
+      content: 'hello',
     })
     expect(
       upgraded
         .prepare<[], { name: string }>('PRAGMA table_info(messages)')
         .all()
-        .map((row) => row.name)
+        .map((row) => row.name),
     ).toContain('tool_calls')
     expect(tableNames(upgraded)).toContain('model_profiles')
   })
@@ -132,7 +132,7 @@ describe('openDatabase', () => {
       name: 'demo',
       path: 'F:\\demo',
       createdAt: '2026-10-22T00:00:00.000Z',
-      updatedAt: '2026-10-22T00:00:00.000Z'
+      updatedAt: '2026-10-22T00:00:00.000Z',
     })
 
     const reopened = open()
@@ -150,14 +150,14 @@ describe('RepositoryStore', () => {
       name: 'older',
       path: 'F:\\older',
       createdAt: '2026-10-01T00:00:00.000Z',
-      updatedAt: '2026-10-01T00:00:00.000Z'
+      updatedAt: '2026-10-01T00:00:00.000Z',
     })
     store.insert({
       id: '22222222-2222-4222-8222-222222222222',
       name: 'newer',
       path: 'F:\\Newer',
       createdAt: '2026-10-02T00:00:00.000Z',
-      updatedAt: '2026-10-02T00:00:00.000Z'
+      updatedAt: '2026-10-02T00:00:00.000Z',
     })
 
     expect(store.list().map((record) => record.name)).toEqual(['newer', 'older'])
@@ -172,14 +172,14 @@ describe('RepositoryStore', () => {
       name: 'older',
       path: 'F:\\older',
       createdAt: '2026-10-01T00:00:00.000Z',
-      updatedAt: '2026-10-01T00:00:00.000Z'
+      updatedAt: '2026-10-01T00:00:00.000Z',
     })
     store.insert({
       id: '22222222-2222-4222-8222-222222222222',
       name: 'newer',
       path: 'F:\\newer',
       createdAt: '2026-10-02T00:00:00.000Z',
-      updatedAt: '2026-10-02T00:00:00.000Z'
+      updatedAt: '2026-10-02T00:00:00.000Z',
     })
 
     store.touch('11111111-1111-4111-8111-111111111111', '2026-10-03T00:00:00.000Z')
@@ -194,7 +194,7 @@ describe('RepositoryStore', () => {
       name: "x'); DROP TABLE repositories; --",
       path: 'F:\\demo',
       createdAt: '2026-10-01T00:00:00.000Z',
-      updatedAt: '2026-10-01T00:00:00.000Z'
+      updatedAt: '2026-10-01T00:00:00.000Z',
     })
 
     expect(tableNames(db)).toContain('repositories')
@@ -209,7 +209,7 @@ describe('数据库外键', () => {
       name: 'demo',
       path: 'F:\\demo',
       createdAt: '2026-10-01T00:00:00.000Z',
-      updatedAt: '2026-10-01T00:00:00.000Z'
+      updatedAt: '2026-10-01T00:00:00.000Z',
     })
   }
 
@@ -218,9 +218,9 @@ describe('数据库外键', () => {
       db
         .prepare(
           `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?)`,
         )
-        .run('c1', '00000000-0000-4000-8000-000000000000', 't', 'now', 'now')
+        .run('c1', '00000000-0000-4000-8000-000000000000', 't', 'now', 'now'),
     ).toThrow(/FOREIGN KEY/)
   })
 
@@ -229,27 +229,27 @@ describe('数据库外键', () => {
     insertRepository(store)
     db.prepare(
       `INSERT INTO conversations (id, repository_id, title, created_at, updated_at)
-       VALUES ('c1', '11111111-1111-4111-8111-111111111111', 't', 'now', 'now')`
+       VALUES ('c1', '11111111-1111-4111-8111-111111111111', 't', 'now', 'now')`,
     ).run()
     db.prepare(
       `INSERT INTO messages (id, conversation_id, role, content, created_at)
-       VALUES ('m1', 'c1', 'user', 'hello', 'now')`
+       VALUES ('m1', 'c1', 'user', 'hello', 'now')`,
     ).run()
     db.prepare(
       `INSERT INTO edit_sessions (id, conversation_id, repository_id, status, created_at, updated_at)
-       VALUES ('e1', 'c1', '11111111-1111-4111-8111-111111111111', 'proposed', 'now', 'now')`
+       VALUES ('e1', 'c1', '11111111-1111-4111-8111-111111111111', 'proposed', 'now', 'now')`,
     ).run()
     db.prepare(
       `INSERT INTO file_edits (
          id, edit_session_id, relative_path, operation, original_content,
          proposed_content, original_hash, status, created_at, updated_at
-       ) VALUES ('f1', 'e1', 'src/index.ts', 'modify', 'old', 'new', ?, 'proposed', 'now', 'now')`
+       ) VALUES ('f1', 'e1', 'src/index.ts', 'modify', 'old', 'new', ?, 'proposed', 'now', 'now')`,
     ).run('a'.repeat(64))
 
     db.prepare('DELETE FROM repositories WHERE id = ?').run('11111111-1111-4111-8111-111111111111')
 
     expect(db.prepare('SELECT repository_id FROM conversations WHERE id = ?').get('c1')).toEqual({
-      repository_id: null
+      repository_id: null,
     })
     expect(db.prepare('SELECT COUNT(*) AS count FROM messages').get()).toEqual({ count: 1 })
     expect(db.prepare('SELECT COUNT(*) AS count FROM edit_sessions').get()).toEqual({ count: 0 })

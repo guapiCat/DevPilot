@@ -26,7 +26,7 @@ function boundsRange(bounds: FishBounds): { min: number; maxX: number; maxY: num
   return {
     min: margin,
     maxX: Math.max(margin, bounds.viewportWidth - bounds.fishSize - margin),
-    maxY: Math.max(margin, bounds.viewportHeight - bounds.fishSize - margin)
+    maxY: Math.max(margin, bounds.viewportHeight - bounds.fishSize - margin),
   }
 }
 
@@ -38,7 +38,7 @@ export function clampFishPosition(point: FishPoint, bounds: FishBounds): FishPoi
 export function pickFishJump(
   bounds: FishBounds,
   avoid: readonly FishPoint[] = [],
-  random: () => number = Math.random
+  random: () => number = Math.random,
 ): FishPoint {
   const { min, maxX, maxY } = boundsRange(bounds)
   let candidate: FishPoint = { x: min, y: min }
@@ -46,7 +46,7 @@ export function pickFishJump(
   for (let attempt = 0; attempt < 24; attempt += 1) {
     candidate = {
       x: min + random() * (maxX - min),
-      y: min + random() * (maxY - min)
+      y: min + random() * (maxY - min),
     }
     if (avoid.every((point) => distance(candidate, point) >= FISH_MIN_JUMP_DISTANCE)) {
       return candidate

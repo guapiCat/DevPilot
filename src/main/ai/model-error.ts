@@ -4,7 +4,7 @@ export class ModelAdapterError extends Error {
   constructor(
     readonly code: ModelErrorCode,
     message: string,
-    readonly httpStatus?: number
+    readonly httpStatus?: number,
   ) {
     super(message)
     this.name = 'ModelAdapterError'
@@ -23,9 +23,7 @@ function readStatus(value: unknown, depth: number): number | undefined {
   }
 
   return (
-    readStatus(record.cause, depth + 1) ??
-    readStatus(record.response, depth + 1) ??
-    readStatus(record.error, depth + 1)
+    readStatus(record.cause, depth + 1) ?? readStatus(record.response, depth + 1) ?? readStatus(record.error, depth + 1)
   )
 }
 

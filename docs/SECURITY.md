@@ -1,6 +1,6 @@
 # DevPilot 安全说明
 
-> 适用范围：V1（阶段 1–6 已实现部分与后续阶段计划）
+> 适用范围：V1（阶段 1–8 已实现部分与后续阶段计划）
 > 技术基线：`docs/TECHNICAL_DESIGN.md` 第 9、13、14 节
 
 ## 1. 安全边界
@@ -20,10 +20,10 @@ Main（Electron）
 - 主进程不信任 Renderer 传入的路径、ID 和参数。
 - Shared 仅包含类型、Zod Schema 与常量。
 
-## 2. 已实现措施（阶段 1–6）
+## 2. 已实现措施（阶段 1–8）
 
 - BrowserWindow 启用 `contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`。
-- 仅暴露应用信息、Ping、AI 配置状态与连接测试、仓库选择/列表/文件树、文件读写、Git status/diff 与对话等具名能力。
+- 仅暴露应用信息、Ping、AI 配置状态与连接测试、仓库选择/列表/文件树、文件读写、Git status/diff 与用户发起的暂存/提交/分支/远程同步、对话等具名能力。
 - 仓库只能由用户通过系统目录对话框明确选择；文件操作使用仓库 ID + 相对路径。
 - 移出仓库只删除应用内登记与数据库记录，**不删除磁盘文件**；操作前需在界面确认。关联会话保留并解除关联（`repository_id` 置空），编辑会话按外键级联删除。
 - 删除会话会**永久删除该会话及其全部消息**，仅删除应用数据库记录，不影响磁盘文件；操作前需在界面确认，生成中的会话禁止删除。
@@ -42,12 +42,15 @@ Main（Electron）
 - `.env` 仅由主进程加载；加载器不打印配置值，只记录加载文件数量。
 - `.env` 已加入 `.gitignore`；仓库内仅保留 `.env.example`。
 - 页面禁止任意导航；新窗口请求一律拒绝，`https://` 链接交由系统浏览器打开。
-- 未提供任意命令执行、自动提交/推送或工作区清理能力。
+- 未提供任意命令执行；Git 写操作仅限固定白名单的用户手动操作，AI 工具不能暂存、提交、切换分支或推送。
 - 未保存修改在关闭标签、切换仓库、离开工作区与退出应用时提示，避免静默丢失。
 - 手动保存只覆盖已存在且已读取的文件，不提供新建、删除或重命名能力。
-- Git 仅开放只读命令：`status --porcelain=v1 -z`、`diff`、`rev-parse`、`branch --show-current`；不提供暂存、提交、推送、分支切换或任意 Git 参数入口。
-- Git 命令使用 `spawn('git', args, { shell: false })` 参数数组执行，`--` 分隔路径，Diff 路径先通过安全相对路径校验；限时 10 秒、stdout 上限 5 MB、Diff 展示上限 512 KB，超限返回稳定错误码。
-- Git 错误按 stderr 分类为 `NOT_A_GIT_REPOSITORY`、`GIT_NOT_AVAILABLE`、`GIT_TIMEOUT`、`GIT_OUTPUT_TOO_LARGE`、`GIT_COMMAND_FAILED`，日志不记录文件内容或完整命令输出。
+- Git 仅执行固定白名单命令：只读 `status`、`diff`、`rev-parse`、`branch`、`for-each-ref`、`log`、`show`、`diff-tree`、`remote`、`rev-list`；写操作 `add`、`restore --staged`、`rm --cached`（unborn）、`commit -m`、`branch` / `switch`、`fetch`、`pull --ff-only`、`push`。没有任意 Git 参数入口，也不提供 reset、clean、amend、rebase、stash、force、删除分支或远端。
+- Git 写操作只由用户在“源代码管理”页触发：路径经 `isSafeGitPath` 校验并配合 `--literal-pathspecs` 与 `--`；分支名、提交信息（trim、长度、NUL）与 SHA（40/64 位小写十六进制）在 IPC 与服务层双重校验；remote 名只接受 `[A-Za-z0-9._-]`。
+- Git 命令使用 `spawn('git', args, { shell: false })` 参数数组执行；只读命令限时 10 秒，本地写 30 秒、网络 60 秒，stdout 上限 5 MB，Diff/提交展示按 512 KB 截断，超限返回稳定错误码。
+- 网络 Git 命令禁用交互式凭据提示（`GIT_TERMINAL_PROMPT=0`、`GCM_INTERACTIVE=never`、`SSH_ASKPASS_REQUIRE=never`），协议白名单为 `https:ssh:file`；私有远端需在系统凭据管理器中预先配置。
+- pull 固定 `--ff-only`，不执行 merge/rebase；push 不提供 force、delete、tags、all、mirror；提交禁用 GPG 签名且只提交已暂存内容，hooks 照常运行且不可跳过。
+- Git 错误按 stderr 分类为稳定错误码（含 `NOT_A_GIT_REPOSITORY`、`GIT_NOT_AVAILABLE`、`GIT_TIMEOUT`、`GIT_OUTPUT_TOO_LARGE`、`GIT_BRANCH_EXISTS`、`GIT_WORKTREE_DIRTY`、`GIT_CONFLICT`、`GIT_NON_FAST_FORWARD`、`GIT_AUTH_REQUIRED`、`GIT_INDEX_LOCKED` 等）并返回固定中文消息；日志只记录操作、退出码与错误码，不记录 stderr 原文、文件内容或完整命令输出。
 - 加载失败的 `.env` 会记录错误原因，不静默吞掉异常。
 - SQLite 数据库位于 Electron `userData` 目录（`devpilot.db`），不写入安装目录或用户仓库；迁移由 `user_version` 管理。
 - 数据库访问全部使用 `better-sqlite3` 参数化语句，不拼接用户输入；启用 `foreign_keys`、WAL 与 `busy_timeout`。
@@ -119,7 +122,7 @@ Main（Electron）
 
 ## 5. 文件、Git、数据库与对话防护
 
-阶段 3–6 已实现（读取、手动写入、只读 Git、本地 SQLite、云端对话、只读代码工具与 AI 修改审核）：
+阶段 3–8 已实现（读取、手动写入、Git 只读与用户发起的写操作、本地 SQLite、云端对话、只读代码工具与 AI 修改审核）：
 
 - [x] 仓库必须由用户通过系统目录对话框明确选择；模型输出不能注册仓库。
 - [x] 使用仓库 ID + 相对路径访问文件；主进程 `realpath` 规范化后做路径关系判断，不使用字符串前缀匹配。
@@ -129,8 +132,11 @@ Main（Electron）
 - [x] 手动保存重新校验路径、仓库范围与 SHA-256 哈希；外部修改返回 `FILE_CHANGED`。
 - [x] 写入限制 1 MB、拒绝空字符、保留 BOM，并使用临时文件原子替换。
 - [x] 关闭脏标签、切换仓库、离开工作区与退出应用时提示未保存修改。
-- [x] Git 命令使用参数数组执行、`shell: false`，设置 10 秒超时与输出上限；V1 仅只读操作，无写入、提交或推送能力。
+- [x] Git 命令使用参数数组执行、`shell: false`，设置超时与输出上限；写操作仅限固定白名单与用户手动触发，AI 工具保持只读。
 - [x] Git Diff 路径通过安全相对路径校验，未登记的仓库 ID 与仓库外路径直接拒绝。
+- [x] Git 写操作的路径、分支名、提交信息、SHA 与 remote 名双重校验；使用 literal pathspec 与 `--` 分隔（单元测试覆盖）。
+- [x] 暂存/取消暂存、提交、历史与单次提交详情、分支新建/切换、fetch/快进 pull/push 在真实临时仓库上测试（含 unborn、分离 HEAD、重命名、合并提交、index.lock、非快进与脏工作区）。
+- [x] Git 错误分类与固定消息、不泄漏 stderr（单元测试覆盖）。
 - [x] SQLite 使用参数化 SQL 与 `user_version` 迁移；启用外键约束；数据库位于 `userData`，不保存 API Key 明文或普通文件内容。
 - [x] 模型档案 Key 使用 `safeStorage` 加密后入库，IPC/Renderer 只返回 `hasApiKey`；加密不可用或解密失败返回稳定错误码（单元测试覆盖，实机 DPAPI 验收待补充）。
 - [x] 自定义 Base URL 经 Zod 校验：仅 https，http 仅限本地回环，拒绝 URL 内嵌凭据（单元测试覆盖）。
@@ -191,4 +197,6 @@ Main（Electron）
 - [ ] 重启应用后模型档案与 active 保留；用 SQLite 查询确认 `api_key_cipher` 为 base64 密文且 Renderer/IPC 返回无 Key。
 - [ ] 切换 active 后对话与工具调用正常；关闭工具开关后助手明确声明未读取文件。
 - [ ] 工作区 Diff 面板的人工验收（阶段 7 最终验收）。
+- [x] 源代码管理页的写命令参数、错误分类与确认逻辑（单元测试覆盖）。
+- [ ] 源代码管理页在真实 Electron 窗口中的手工验收：暂存/提交/历史/分支/远程同步、脏工作区确认、非快进拒绝与 AI 工具仍只读。
 - [ ] Windows 安装包中原生模块加载验证（阶段 7）。

@@ -9,7 +9,7 @@ withDefaults(
     nodes: FileTreeNode[]
     loading?: boolean
   }>(),
-  { loading: false }
+  { loading: false },
 )
 
 const emit = defineEmits<{
@@ -26,8 +26,7 @@ const emit = defineEmits<{
       compact
       :icon="FolderOpened"
       title="尚未选择仓库"
-      description="点击上方“选择仓库”选择本地目录后，文件树会显示在这里。"
-    />
+      description="点击上方“选择仓库”选择本地目录后，文件树会显示在这里。" />
 
     <ul v-else class="root">
       <FileTreeItem
@@ -35,8 +34,7 @@ const emit = defineEmits<{
         :key="node.relativePath"
         :node="node"
         :depth="0"
-        @open="emit('open', $event)"
-      />
+        @open="emit('open', $event)" />
     </ul>
   </div>
 </template>

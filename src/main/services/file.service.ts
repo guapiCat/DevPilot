@@ -1,11 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import {
-  BINARY_SNIFF_BYTES,
-  MAX_FILE_READ_BYTES,
-  MAX_FILE_WRITE_BYTES
-} from '@shared/constants/app'
+import { BINARY_SNIFF_BYTES, MAX_FILE_READ_BYTES, MAX_FILE_WRITE_BYTES } from '@shared/constants/app'
 import type { FileContent, FileWriteResult } from '@shared/types/repository'
 import { ServiceError } from '../utils/service-error'
 import { repositoryService } from './repository.service'
@@ -48,10 +44,7 @@ export class FileService {
     }
 
     if (info.size > MAX_FILE_READ_BYTES) {
-      throw new ServiceError(
-        'FILE_TOO_LARGE',
-        `文件超过 ${formatLimitMb(MAX_FILE_READ_BYTES)} 读取上限`
-      )
+      throw new ServiceError('FILE_TOO_LARGE', `文件超过 ${formatLimitMb(MAX_FILE_READ_BYTES)} 读取上限`)
     }
 
     const buffer = await readFile(targetPath)
@@ -77,7 +70,7 @@ export class FileService {
       size: info.size,
       encoding: 'utf-8',
       hadBom,
-      hash: sha256(buffer)
+      hash: sha256(buffer),
     }
   }
 
@@ -85,7 +78,7 @@ export class FileService {
     repositoryId: string,
     relativePath: string,
     content: string,
-    expectedHash: string
+    expectedHash: string,
   ): Promise<FileWriteResult> {
     if (content.includes('\0')) {
       throw new ServiceError('UNSUPPORTED_FILE', '文件内容不能包含空字符')
@@ -114,10 +107,7 @@ export class FileService {
     const buffer = hasUtf8Bom(originalBuffer) ? Buffer.concat([UTF8_BOM, body]) : body
 
     if (buffer.length > MAX_FILE_WRITE_BYTES) {
-      throw new ServiceError(
-        'FILE_TOO_LARGE',
-        `文件超过 ${formatLimitMb(MAX_FILE_WRITE_BYTES)} 写入上限`
-      )
+      throw new ServiceError('FILE_TOO_LARGE', `文件超过 ${formatLimitMb(MAX_FILE_WRITE_BYTES)} 写入上限`)
     }
 
     const tempPath = join(dirname(targetPath), `.devpilot-${randomUUID()}.tmp`)
@@ -136,25 +126,18 @@ export class FileService {
       relativePath,
       size: buffer.length,
       hadBom: hasUtf8Bom(buffer),
-      hash: sha256(buffer)
+      hash: sha256(buffer),
     }
   }
 
-  async writeNew(
-    repositoryId: string,
-    relativePath: string,
-    content: string
-  ): Promise<FileWriteResult> {
+  async writeNew(repositoryId: string, relativePath: string, content: string): Promise<FileWriteResult> {
     if (content.includes('\0')) {
       throw new ServiceError('UNSUPPORTED_FILE', '文件内容不能包含空字符')
     }
 
     const buffer = Buffer.from(content, 'utf8')
     if (buffer.length > MAX_FILE_WRITE_BYTES) {
-      throw new ServiceError(
-        'FILE_TOO_LARGE',
-        `文件超过 ${formatLimitMb(MAX_FILE_WRITE_BYTES)} 写入上限`
-      )
+      throw new ServiceError('FILE_TOO_LARGE', `文件超过 ${formatLimitMb(MAX_FILE_WRITE_BYTES)} 写入上限`)
     }
 
     const targetPath = await this.repositories.resolveNewFilePath(repositoryId, relativePath)
@@ -175,7 +158,7 @@ export class FileService {
       relativePath,
       size: buffer.length,
       hadBom: false,
-      hash: sha256(buffer)
+      hash: sha256(buffer),
     }
   }
 }

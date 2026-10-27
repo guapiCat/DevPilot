@@ -29,7 +29,7 @@ async function createTempDir(prefix: string): Promise<string> {
 function proposeModify(
   runId: string,
   oldText = 'const b = 2',
-  newText = 'const b = 3'
+  newText = 'const b = 3',
 ): ReturnType<EditService['propose']> {
   return service.propose({
     repositoryId,
@@ -38,7 +38,7 @@ function proposeModify(
     relativePath: 'src/app.ts',
     operation: 'modify',
     oldText,
-    newText
+    newText,
   })
 }
 
@@ -59,13 +59,21 @@ beforeEach(async () => {
   store = new EditStore(db)
 
   const now = new Date().toISOString()
-  db.prepare(
-    'INSERT INTO repositories (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(repositoryId, 'demo-repo', repositoryPath, now, now)
+  db.prepare('INSERT INTO repositories (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+    repositoryId,
+    'demo-repo',
+    repositoryPath,
+    now,
+    now,
+  )
   conversationId = crypto.randomUUID()
-  db.prepare(
-    'INSERT INTO conversations (id, repository_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(conversationId, repositoryId, '测试会话', now, now)
+  db.prepare('INSERT INTO conversations (id, repository_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+    conversationId,
+    repositoryId,
+    '测试会话',
+    now,
+    now,
+  )
 
   let clock = Date.parse('2026-10-22T00:00:00.000Z')
   service = new EditService(repositories, files, () => new Date((clock += 1000)))
@@ -96,7 +104,7 @@ describe('EditService.propose 修改文件', () => {
 
   it('oldText 未找到时返回 EDIT_CONFLICT', async () => {
     await expect(proposeModify('run-1', 'missing fragment')).rejects.toMatchObject({
-      code: 'EDIT_CONFLICT'
+      code: 'EDIT_CONFLICT',
     })
   })
 
@@ -109,14 +117,14 @@ describe('EditService.propose 修改文件', () => {
         relativePath: 'dup.txt',
         operation: 'modify',
         oldText: 'x',
-        newText: 'y'
-      })
+        newText: 'y',
+      }),
     ).rejects.toMatchObject({ code: 'EDIT_CONFLICT' })
   })
 
   it('建议内容与当前文件相同时拒绝', async () => {
     await expect(proposeModify('run-1', 'const b = 2', 'const b = 2')).rejects.toMatchObject({
-      code: 'EDIT_CONFLICT'
+      code: 'EDIT_CONFLICT',
     })
   })
 
@@ -128,8 +136,8 @@ describe('EditService.propose 修改文件', () => {
         runId: 'run-1',
         relativePath: 'src/app.ts',
         operation: 'modify',
-        newText: 'x'
-      })
+        newText: 'x',
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
 
     await expect(
@@ -139,8 +147,8 @@ describe('EditService.propose 修改文件', () => {
         runId: 'run-1',
         relativePath: 'src/app.ts',
         operation: 'modify',
-        oldText: 'const b = 2'
-      })
+        oldText: 'const b = 2',
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
   })
 
@@ -153,8 +161,8 @@ describe('EditService.propose 修改文件', () => {
         relativePath: 'src/missing.ts',
         operation: 'modify',
         oldText: 'x',
-        newText: 'y'
-      })
+        newText: 'y',
+      }),
     ).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' })
   })
 })
@@ -167,7 +175,7 @@ describe('EditService.propose 新建文件', () => {
       runId: 'run-1',
       relativePath: 'src/new.ts',
       operation: 'create',
-      content: 'export const x = 1\n'
+      content: 'export const x = 1\n',
     })
 
     expect(result.file.operation).toBe('create')
@@ -184,8 +192,8 @@ describe('EditService.propose 新建文件', () => {
         runId: 'run-1',
         relativePath: 'src/app.ts',
         operation: 'create',
-        content: 'x'
-      })
+        content: 'x',
+      }),
     ).rejects.toMatchObject({ code: 'FILE_ALREADY_EXISTS' })
   })
 
@@ -197,8 +205,8 @@ describe('EditService.propose 新建文件', () => {
         runId: 'run-1',
         relativePath: 'missing/new.ts',
         operation: 'create',
-        content: 'x'
-      })
+        content: 'x',
+      }),
     ).rejects.toMatchObject({ code: 'FILE_NOT_FOUND' })
   })
 
@@ -209,8 +217,8 @@ describe('EditService.propose 新建文件', () => {
         conversationId,
         runId: 'run-1',
         relativePath: 'src/new.ts',
-        operation: 'create'
-      })
+        operation: 'create',
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' })
   })
 })
@@ -224,8 +232,8 @@ describe('EditService.propose 约束', () => {
         runId: 'run-1',
         relativePath: '.env',
         operation: 'create',
-        content: 'SECRET=1'
-      })
+        content: 'SECRET=1',
+      }),
     ).rejects.toMatchObject({ code: 'PATH_NOT_ALLOWED' })
   })
 
@@ -237,7 +245,7 @@ describe('EditService.propose 约束', () => {
       runId: 'run-1',
       relativePath: 'src/new.ts',
       operation: 'create',
-      content: 'export const y = 2\n'
+      content: 'export const y = 2\n',
     })
 
     expect(second.editSessionId).toBe(first.editSessionId)
@@ -255,7 +263,7 @@ describe('EditService.propose 约束', () => {
     await proposeModify('run-1', 'const a = 1', 'const a = 2')
 
     await expect(proposeModify('run-1', 'const b = 2', 'const b = 3')).rejects.toMatchObject({
-      code: 'EDIT_CONFLICT'
+      code: 'EDIT_CONFLICT',
     })
   })
 
@@ -267,7 +275,7 @@ describe('EditService.propose 约束', () => {
         runId: 'run-1',
         relativePath: `many/f${index}.txt`,
         operation: 'create',
-        content: `file ${index}`
+        content: `file ${index}`,
       })
     }
 
@@ -278,8 +286,8 @@ describe('EditService.propose 约束', () => {
         runId: 'run-1',
         relativePath: 'many/one-too-many.txt',
         operation: 'create',
-        content: 'x'
-      })
+        content: 'x',
+      }),
     ).rejects.toMatchObject({ code: 'EDIT_CONFLICT' })
   })
 
@@ -298,9 +306,7 @@ describe('EditService.applyFile', () => {
     expect(result.file.status).toBe('applied')
     expect(result.hash).toMatch(/^[a-f0-9]{64}$/)
     expect(result.hadBom).toBe(false)
-    expect(await readFile(join(repositoryPath, 'src', 'app.ts'), 'utf8')).toBe(
-      'const a = 1\nconst b = 3\n'
-    )
+    expect(await readFile(join(repositoryPath, 'src', 'app.ts'), 'utf8')).toBe('const a = 1\nconst b = 3\n')
     expect(service.getSession(proposal.editSessionId).status).toBe('completed')
     expect(service.listPendingSessions(conversationId)).toEqual([])
   })
@@ -312,24 +318,22 @@ describe('EditService.applyFile', () => {
       runId: 'run-1',
       relativePath: 'src/new.ts',
       operation: 'create',
-      content: 'export const x = 1\n'
+      content: 'export const x = 1\n',
     })
 
     const result = await service.applyFile(proposal.editSessionId, proposal.fileEditId)
 
     expect(result.file.status).toBe('applied')
-    expect(await readFile(join(repositoryPath, 'src', 'new.ts'), 'utf8')).toBe(
-      'export const x = 1\n'
-    )
+    expect(await readFile(join(repositoryPath, 'src', 'new.ts'), 'utf8')).toBe('export const x = 1\n')
   })
 
   it('文件被外部修改后应用标记为过期', async () => {
     const proposal = await proposeModify('run-1')
     await writeFile(join(repositoryPath, 'src', 'app.ts'), 'external change\n')
 
-    await expect(
-      service.applyFile(proposal.editSessionId, proposal.fileEditId)
-    ).rejects.toMatchObject({ code: 'FILE_CHANGED' })
+    await expect(service.applyFile(proposal.editSessionId, proposal.fileEditId)).rejects.toMatchObject({
+      code: 'FILE_CHANGED',
+    })
 
     const session = service.getSession(proposal.editSessionId)
     expect(session.status).toBe('active')
@@ -347,13 +351,13 @@ describe('EditService.applyFile', () => {
       runId: 'run-1',
       relativePath: 'src/late.ts',
       operation: 'create',
-      content: 'proposed\n'
+      content: 'proposed\n',
     })
     await writeFile(join(repositoryPath, 'src', 'late.ts'), 'external\n')
 
-    await expect(
-      service.applyFile(proposal.editSessionId, proposal.fileEditId)
-    ).rejects.toMatchObject({ code: 'FILE_CHANGED' })
+    await expect(service.applyFile(proposal.editSessionId, proposal.fileEditId)).rejects.toMatchObject({
+      code: 'FILE_CHANGED',
+    })
     expect(service.getSession(proposal.editSessionId).files[0].status).toBe('stale')
   })
 
@@ -365,7 +369,7 @@ describe('EditService.applyFile', () => {
       runId: 'run-1',
       relativePath: 'src/new.ts',
       operation: 'create',
-      content: 'export const x = 1\n'
+      content: 'export const x = 1\n',
     })
 
     await service.applyFile(first.editSessionId, first.fileEditId)
@@ -378,21 +382,21 @@ describe('EditService.applyFile', () => {
   it('未知建议返回 EDIT_NOT_FOUND', async () => {
     const proposal = await proposeModify('run-1')
 
-    await expect(service.applyFile(crypto.randomUUID(), proposal.fileEditId)).rejects.toMatchObject(
-      { code: 'EDIT_NOT_FOUND' }
-    )
-    await expect(
-      service.applyFile(proposal.editSessionId, crypto.randomUUID())
-    ).rejects.toMatchObject({ code: 'EDIT_NOT_FOUND' })
+    await expect(service.applyFile(crypto.randomUUID(), proposal.fileEditId)).rejects.toMatchObject({
+      code: 'EDIT_NOT_FOUND',
+    })
+    await expect(service.applyFile(proposal.editSessionId, crypto.randomUUID())).rejects.toMatchObject({
+      code: 'EDIT_NOT_FOUND',
+    })
   })
 
   it('已处理过的建议不能重复应用', async () => {
     const proposal = await proposeModify('run-1')
     await service.applyFile(proposal.editSessionId, proposal.fileEditId)
 
-    await expect(
-      service.applyFile(proposal.editSessionId, proposal.fileEditId)
-    ).rejects.toMatchObject({ code: 'EDIT_CONFLICT' })
+    await expect(service.applyFile(proposal.editSessionId, proposal.fileEditId)).rejects.toMatchObject({
+      code: 'EDIT_CONFLICT',
+    })
   })
 })
 
@@ -402,9 +406,7 @@ describe('EditService.rejectFile', () => {
     const rejected = service.rejectFile(proposal.editSessionId, proposal.fileEditId)
 
     expect(rejected.status).toBe('rejected')
-    expect(await readFile(join(repositoryPath, 'src', 'app.ts'), 'utf8')).toBe(
-      'const a = 1\nconst b = 2\n'
-    )
+    expect(await readFile(join(repositoryPath, 'src', 'app.ts'), 'utf8')).toBe('const a = 1\nconst b = 2\n')
     expect(service.getSession(proposal.editSessionId).status).toBe('completed')
     expect(service.listPendingSessions(conversationId)).toEqual([])
   })

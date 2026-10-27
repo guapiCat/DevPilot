@@ -13,7 +13,7 @@ export interface ConnectionTestOptions {
 
 export async function testAdapterConnection(
   config: ResolvedAiConfig,
-  options: ConnectionTestOptions = {}
+  options: ConnectionTestOptions = {},
 ): Promise<AiConnectionTestResult> {
   const adapterFactory = options.adapterFactory ?? createModelAdapter
   const timeoutMs = options.timeoutMs ?? MODEL_CONNECTION_TEST_TIMEOUT_MS
@@ -26,7 +26,7 @@ export async function testAdapterConnection(
     for await (const event of adapter.stream({
       messages: [{ role: 'user', content: '请只回复 OK。' }],
       signal: controller.signal,
-      maxTokens: 8
+      maxTokens: 8,
     })) {
       void event
       if (controller.signal.aborted) break

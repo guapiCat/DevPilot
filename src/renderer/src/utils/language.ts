@@ -70,7 +70,7 @@ const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
   properties: 'ini',
   toml: 'ini',
   txt: 'plaintext',
-  log: 'plaintext'
+  log: 'plaintext',
 }
 
 const LANGUAGE_BY_FILENAME: Readonly<Record<string, string>> = {
@@ -78,7 +78,7 @@ const LANGUAGE_BY_FILENAME: Readonly<Record<string, string>> = {
   '.editorconfig': 'ini',
   '.gitattributes': 'plaintext',
   '.gitignore': 'plaintext',
-  '.npmrc': 'ini'
+  '.npmrc': 'ini',
 }
 
 export function getMonacoLanguage(relativePath: string): string {

@@ -13,7 +13,7 @@ describe('getMonacoLanguage', () => {
       ['deploy/pod.yaml', 'yaml'],
       ['tools/run.ps1', 'powershell'],
       ['src/lib.rs', 'rust'],
-      ['include/util.hpp', 'cpp']
+      ['include/util.hpp', 'cpp'],
     ]
 
     for (const [path, language] of cases) {

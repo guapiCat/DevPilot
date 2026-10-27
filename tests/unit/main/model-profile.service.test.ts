@@ -32,7 +32,7 @@ const DEEPSEEK_INPUT: ModelProfileInput = {
   model: 'deepseek-chat',
   baseUrl: 'https://api.deepseek.com',
   apiKey: 'sk-deepseek',
-  toolsEnabled: true
+  toolsEnabled: true,
 }
 
 const COMPAT_INPUT: ModelProfileInput = {
@@ -41,7 +41,7 @@ const COMPAT_INPUT: ModelProfileInput = {
   model: 'qwen2.5:7b',
   baseUrl: 'http://127.0.0.1:11434/v1',
   apiKey: '',
-  toolsEnabled: false
+  toolsEnabled: false,
 }
 
 const tempDirs: string[] = []
@@ -54,12 +54,12 @@ function createService(
     cipher?: SecretCipher
     env?: Record<string, string | undefined>
     useStore?: boolean
-  } = {}
+  } = {},
 ): ModelProfileService {
   return new ModelProfileService({
     store: options.useStore === false ? null : store,
     cipher: options.cipher ?? new FakeCipher(),
-    env: options.env ?? {}
+    env: options.env ?? {},
   })
 }
 
@@ -93,7 +93,7 @@ describe('ModelProfileService 档案管理', () => {
       name: 'DeepSeek',
       provider: 'deepseek',
       hasApiKey: true,
-      isActive: true
+      isActive: true,
     })
 
     const serialized = JSON.stringify(status)
@@ -110,7 +110,7 @@ describe('ModelProfileService 档案管理', () => {
       id: profileId,
       ...DEEPSEEK_INPUT,
       name: 'DeepSeek 2',
-      apiKey: '   '
+      apiKey: '   ',
     })
 
     const updated = service.getStatus().profiles[0]
@@ -121,9 +121,7 @@ describe('ModelProfileService 档案管理', () => {
   it('DeepSeek 缺少 Key 时拒绝保存', () => {
     const service = createService()
 
-    expect(() => service.save({ ...DEEPSEEK_INPUT, apiKey: '' })).toThrowError(
-      /DeepSeek 模型需要填写 API Key/
-    )
+    expect(() => service.save({ ...DEEPSEEK_INPUT, apiKey: '' })).toThrowError(/DeepSeek 模型需要填写 API Key/)
     expect(service.list()).toEqual([])
   })
 
@@ -137,7 +135,7 @@ describe('ModelProfileService 档案管理', () => {
       provider: 'openai-compatible',
       apiKey: '',
       model: 'qwen2.5:7b',
-      toolsEnabled: false
+      toolsEnabled: false,
     })
   })
 
@@ -159,10 +157,10 @@ describe('ModelProfileService 档案管理', () => {
     const service = createService()
 
     expect(() => service.activate('11111111-1111-4111-8111-111111111111')).toThrowError(
-      expect.objectContaining({ code: 'MODEL_PROFILE_NOT_FOUND' })
+      expect.objectContaining({ code: 'MODEL_PROFILE_NOT_FOUND' }),
     )
     expect(() => service.remove('11111111-1111-4111-8111-111111111111')).toThrowError(
-      expect.objectContaining({ code: 'MODEL_PROFILE_NOT_FOUND' })
+      expect.objectContaining({ code: 'MODEL_PROFILE_NOT_FOUND' }),
     )
   })
 
@@ -178,7 +176,7 @@ describe('ModelProfileService 档案管理', () => {
     expect(removed.source).toBe('profile')
     expect(service.resolveActive()).toMatchObject({
       provider: 'openai-compatible',
-      model: 'qwen2.5:7b'
+      model: 'qwen2.5:7b',
     })
 
     const compatId = removed.activeProfileId!
@@ -187,7 +185,7 @@ describe('ModelProfileService 档案管理', () => {
     expect(empty.activeProfileId).toBeNull()
     expect(service.resolveActive()).toMatchObject({
       provider: 'deepseek',
-      apiKey: 'sk-env'
+      apiKey: 'sk-env',
     })
   })
 
@@ -197,16 +195,14 @@ describe('ModelProfileService 档案管理', () => {
       service.save({ ...COMPAT_INPUT, name: `profile-${index}` })
     }
 
-    expect(() => service.save({ ...COMPAT_INPUT, name: 'overflow' })).toThrowError(
-      /最多只能保存 20 个模型档案/
-    )
+    expect(() => service.save({ ...COMPAT_INPUT, name: 'overflow' })).toThrowError(/最多只能保存 20 个模型档案/)
   })
 })
 
 describe('ModelProfileService .env 兜底与降级', () => {
   it('无档案时使用 .env 并标记来源', () => {
     const service = createService({
-      env: { DEEPSEEK_API_KEY: 'sk-env', DEEPSEEK_MODEL: 'deepseek-reasoner' }
+      env: { DEEPSEEK_API_KEY: 'sk-env', DEEPSEEK_MODEL: 'deepseek-reasoner' },
     })
 
     const status = service.getStatus()
@@ -216,7 +212,7 @@ describe('ModelProfileService .env 兜底与降级', () => {
       provider: 'deepseek',
       model: 'deepseek-reasoner',
       activeProfileId: null,
-      envConfigured: true
+      envConfigured: true,
     })
     expect(JSON.stringify(status)).not.toContain('sk-env')
     expect(service.resolveActive()).toMatchObject({ apiKey: 'sk-env' })
@@ -226,22 +222,18 @@ describe('ModelProfileService .env 兜底与降级', () => {
     const service = createService()
 
     expect(service.getStatus()).toMatchObject({ configured: false, source: 'none' })
-    expect(() => service.resolveActive()).toThrowError(
-      expect.objectContaining({ code: 'MODEL_CONFIG_ERROR' })
-    )
+    expect(() => service.resolveActive()).toThrowError(expect.objectContaining({ code: 'MODEL_CONFIG_ERROR' }))
   })
 
   it('数据库不可用时状态回退 .env，写操作报 DATABASE_ERROR', () => {
     const service = createService({
       useStore: false,
-      env: { DEEPSEEK_API_KEY: 'sk-env' }
+      env: { DEEPSEEK_API_KEY: 'sk-env' },
     })
 
     expect(service.getStatus()).toMatchObject({ source: 'env', profiles: [] })
     expect(service.list()).toEqual([])
-    expect(() => service.save(DEEPSEEK_INPUT)).toThrowError(
-      expect.objectContaining({ code: 'DATABASE_ERROR' })
-    )
+    expect(() => service.save(DEEPSEEK_INPUT)).toThrowError(expect.objectContaining({ code: 'DATABASE_ERROR' }))
   })
 })
 
@@ -250,7 +242,7 @@ describe('ModelProfileService 密钥错误处理', () => {
     const service = createService({ cipher: new FakeCipher(false) })
 
     expect(() => service.save(DEEPSEEK_INPUT)).toThrowError(
-      expect.objectContaining({ code: 'SECRET_STORAGE_UNAVAILABLE' })
+      expect.objectContaining({ code: 'SECRET_STORAGE_UNAVAILABLE' }),
     )
     expect(service.getStatus().secretStorageAvailable).toBe(false)
   })
@@ -273,15 +265,15 @@ describe('ModelProfileService 密钥错误处理', () => {
       toolsEnabled: true,
       isActive: true,
       createdAt: '2026-10-01T00:00:00.000Z',
-      updatedAt: '2026-10-01T00:00:00.000Z'
+      updatedAt: '2026-10-01T00:00:00.000Z',
     })
     const service = createService()
 
     expect(() => service.resolveActive()).toThrowError(
       expect.objectContaining({
         code: 'MODEL_CONFIG_ERROR',
-        message: '已保存的 API Key 无法解密，请在设置中重新填写'
-      })
+        message: '已保存的 API Key 无法解密，请在设置中重新填写',
+      }),
     )
   })
 })
@@ -298,8 +290,8 @@ describe('ModelProfileService.resolveDraft', () => {
         provider: 'deepseek',
         model: 'deepseek-chat',
         baseUrl: 'https://api.deepseek.com',
-        apiKey: 'sk-explicit'
-      }).apiKey
+        apiKey: 'sk-explicit',
+      }).apiKey,
     ).toBe('sk-explicit')
     expect(service.list()).toHaveLength(1)
   })
@@ -314,8 +306,8 @@ describe('ModelProfileService.resolveDraft', () => {
         provider: 'deepseek',
         model: 'deepseek-chat',
         baseUrl: 'https://api.deepseek.com',
-        apiKey: '   '
-      }).apiKey
+        apiKey: '   ',
+      }).apiKey,
     ).toBe('sk-deepseek')
   })
 
@@ -326,8 +318,8 @@ describe('ModelProfileService.resolveDraft', () => {
       service.resolveDraft({
         provider: 'deepseek',
         model: 'deepseek-chat',
-        baseUrl: 'https://api.deepseek.com'
-      })
+        baseUrl: 'https://api.deepseek.com',
+      }),
     ).toThrowError(/DeepSeek 模型需要填写 API Key/)
 
     expect(() =>
@@ -335,8 +327,8 @@ describe('ModelProfileService.resolveDraft', () => {
         profileId: '11111111-1111-4111-8111-111111111111',
         provider: 'deepseek',
         model: 'deepseek-chat',
-        baseUrl: 'https://api.deepseek.com'
-      })
+        baseUrl: 'https://api.deepseek.com',
+      }),
     ).toThrowError(expect.objectContaining({ code: 'MODEL_PROFILE_NOT_FOUND' }))
   })
 })

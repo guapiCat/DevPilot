@@ -14,7 +14,7 @@ import {
   ElSkeleton,
   ElSwitch,
   ElTag,
-  ElTooltip
+  ElTooltip,
 } from 'element-plus'
 import 'element-plus/es/components/alert/style/css'
 import 'element-plus/es/components/button/style/css'
@@ -61,7 +61,7 @@ for (const component of [
   ElSkeleton,
   ElSwitch,
   ElTag,
-  ElTooltip
+  ElTooltip,
 ]) {
   app.component(component.name!, component)
 }

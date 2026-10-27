@@ -7,7 +7,7 @@ import type {
   ModelMessage,
   ModelStreamRequest,
   ModelToolCall,
-  ModelToolDefinition
+  ModelToolDefinition,
 } from './model-adapter'
 import { toModelAdapterError } from './model-error'
 
@@ -67,21 +67,19 @@ function toOpenAiTools(tools: ModelToolDefinition[]): BindToolsInput[] {
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters
-    }
+      parameters: tool.parameters,
+    },
   }))
 }
 
-function toLangChainMessage(
-  message: ModelMessage
-): SystemMessage | HumanMessage | AIMessage | ToolMessage {
+function toLangChainMessage(message: ModelMessage): SystemMessage | HumanMessage | AIMessage | ToolMessage {
   if (message.role === 'system') return new SystemMessage(message.content)
   if (message.role === 'user') return new HumanMessage(message.content)
   if (message.role === 'tool') {
     return new ToolMessage({
       content: message.content,
       tool_call_id: message.toolCallId,
-      name: message.toolName
+      name: message.toolName,
     })
   }
 
@@ -89,18 +87,18 @@ function toLangChainMessage(
     id: call.id,
     name: call.name,
     args: isPlainObject(call.arguments) ? call.arguments : {},
-    type: 'tool_call' as const
+    type: 'tool_call' as const,
   }))
 
   return new AIMessage({
     content: message.content,
-    ...(toolCalls && toolCalls.length > 0 ? { tool_calls: toolCalls } : {})
+    ...(toolCalls && toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
   })
 }
 
 export function mergeToolCallChunks(
   state: Map<number, ToolCallAccumulatorState>,
-  chunks: readonly ToolCallChunkLike[]
+  chunks: readonly ToolCallChunkLike[],
 ): void {
   chunks.forEach((chunk, position) => {
     const index = typeof chunk.index === 'number' ? chunk.index : position
@@ -144,17 +142,14 @@ export class OpenAiCompatibleAdapter implements ModelAdapter {
       maxTokens: request.maxTokens,
       temperature: request.temperature,
       streaming: true,
-      configuration: { baseURL: this.options.baseUrl }
+      configuration: { baseURL: this.options.baseUrl },
     })
 
-    const runnable =
-      request.tools && request.tools.length > 0
-        ? model.bindTools!(toOpenAiTools(request.tools))
-        : model
+    const runnable = request.tools && request.tools.length > 0 ? model.bindTools!(toOpenAiTools(request.tools)) : model
 
     try {
       const stream = await runnable.stream(request.messages.map(toLangChainMessage), {
-        signal: request.signal
+        signal: request.signal,
       })
 
       const toolState = new Map<number, ToolCallAccumulatorState>()
@@ -172,7 +167,7 @@ export class OpenAiCompatibleAdapter implements ModelAdapter {
         if (chunk.usage_metadata) {
           usage = {
             inputTokens: chunk.usage_metadata.input_tokens,
-            outputTokens: chunk.usage_metadata.output_tokens
+            outputTokens: chunk.usage_metadata.output_tokens,
           }
         }
       }

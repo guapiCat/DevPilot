@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  containsHighRiskSecret,
-  isSensitivePath,
-  redactSecretSnippet
-} from '@main/ai/tools/sensitive'
+import { containsHighRiskSecret, isSensitivePath, redactSecretSnippet } from '@main/ai/tools/sensitive'
 
 describe('isSensitivePath', () => {
   it('阻断 .env 及变体，但允许示例文件', () => {
@@ -34,7 +30,7 @@ describe('isSensitivePath', () => {
       'private.key',
       'store.p12',
       'cert.crt',
-      'vault.kdbx'
+      'vault.kdbx',
     ]) {
       expect(isSensitivePath(file), file).toBe(true)
     }

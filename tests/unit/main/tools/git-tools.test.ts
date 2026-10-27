@@ -22,7 +22,7 @@ function runGit(cwd: string, args: string[]): Promise<string> {
     const child = spawn('git', ['-c', 'core.autocrlf=false', ...args], {
       cwd,
       windowsHide: true,
-      shell: false
+      shell: false,
     })
     let stdout = ''
     let stderr = ''
@@ -95,7 +95,7 @@ describe('get_git_status 工具', () => {
     const tool = createGitStatusTool(new GitService(repositories, new FileService(repositories)))
 
     await expect(
-      tool.execute({}, { repositoryId: plainId, signal: new AbortController().signal })
+      tool.execute({}, { repositoryId: plainId, signal: new AbortController().signal }),
     ).rejects.toMatchObject({ code: 'NOT_A_GIT_REPOSITORY' })
   })
 })
@@ -121,18 +121,18 @@ describe('get_git_diff 工具', () => {
 
   it('阻断敏感路径与包含密钥的差异', async () => {
     await expect(diffTool.execute({ path: '.env' }, context)).rejects.toMatchObject({
-      code: 'SENSITIVE_FILE'
+      code: 'SENSITIVE_FILE',
     })
 
     await writeFile(join(root, 'file.txt'), 'token sk-abcdefghijklmnopqrstuvwx\n')
     await expect(diffTool.execute({ path: 'file.txt' }, context)).rejects.toMatchObject({
-      code: 'SENSITIVE_FILE'
+      code: 'SENSITIVE_FILE',
     })
   })
 
   it('拒绝路径穿越', async () => {
     await expect(diffTool.execute({ path: '../outside.txt' }, context)).rejects.toMatchObject({
-      code: 'PATH_NOT_ALLOWED'
+      code: 'PATH_NOT_ALLOWED',
     })
   })
 })

@@ -3,11 +3,7 @@ import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
-import {
-  IGNORED_DIRECTORY_NAMES,
-  MAX_FILE_TREE_DEPTH,
-  MAX_FILE_TREE_ENTRIES
-} from '@shared/constants/app'
+import { IGNORED_DIRECTORY_NAMES, MAX_FILE_TREE_DEPTH, MAX_FILE_TREE_ENTRIES } from '@shared/constants/app'
 import type { FileTreeNode, FileTreeResult, RepositorySummary } from '@shared/types/repository'
 import { isSafeRelativePath } from '@shared/utils/path'
 import type { RepositoryStore } from '../database/repository.store'
@@ -81,7 +77,7 @@ async function buildFileTree(root: string): Promise<TreeBuildResult> {
           name: dirent.name,
           relativePath,
           type: 'directory',
-          children: await walk(fullPath, depth + 1)
+          children: await walk(fullPath, depth + 1),
         })
       } else if (dirent.isFile()) {
         seen += 1
@@ -112,9 +108,9 @@ export class RepositoryService {
           path: record.path,
           isGitRepository: existsSync(join(record.path, '.git')),
           createdAt: record.createdAt,
-          updatedAt: record.updatedAt
+          updatedAt: record.updatedAt,
         },
-        realRoot: record.path
+        realRoot: record.path,
       })
     }
   }
@@ -164,7 +160,7 @@ export class RepositoryService {
       path: realRoot,
       isGitRepository: existsSync(join(realRoot, '.git')),
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     }
 
     this.persist(() =>
@@ -173,8 +169,8 @@ export class RepositoryService {
         name: summary.name,
         path: summary.path,
         createdAt: summary.createdAt,
-        updatedAt: summary.updatedAt
-      })
+        updatedAt: summary.updatedAt,
+      }),
     )
 
     this.registry.set(summary.id, { summary, realRoot })

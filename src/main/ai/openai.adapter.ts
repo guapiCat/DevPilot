@@ -14,8 +14,8 @@ export class OpenAiChatAdapter extends OpenAiCompatibleAdapter {
       createModel: (modelOptions: ChatModelOptions) =>
         new ChatOpenAI({
           ...modelOptions,
-          apiKey: modelOptions.apiKey || 'not-needed'
-        })
+          apiKey: modelOptions.apiKey || 'not-needed',
+        }),
     })
   }
 }

@@ -11,7 +11,7 @@ withDefaults(
     generatingId?: string | null
     deletingId?: string | null
   }>(),
-  { creating: false, generatingId: null, deletingId: null }
+  { creating: false, generatingId: null, deletingId: null },
 )
 
 const emit = defineEmits<{
@@ -25,7 +25,7 @@ function formatTime(iso: string): string {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   })
 }
 </script>
@@ -35,25 +35,14 @@ function formatTime(iso: string): string {
     <header class="header">
       <span>会话</span>
       <el-tooltip content="新建会话" placement="right">
-        <el-button
-          circle
-          size="small"
-          aria-label="新建会话"
-          :loading="creating"
-          @click="emit('create')"
-        >
+        <el-button circle size="small" aria-label="新建会话" :loading="creating" @click="emit('create')">
           <el-icon><Plus /></el-icon>
         </el-button>
       </el-tooltip>
     </header>
 
     <div v-if="conversations.length === 0" class="empty">
-      <EmptyState
-        compact
-        :icon="ChatDotRound"
-        title="还没有会话"
-        description="新建会话开始研发讨论"
-      />
+      <EmptyState compact :icon="ChatDotRound" title="还没有会话" description="新建会话开始研发讨论" />
     </div>
 
     <ul v-else class="list">
@@ -63,15 +52,13 @@ function formatTime(iso: string): string {
         class="entry-row"
         :class="{
           active: conversation.id === activeId,
-          deleting: conversation.id === deletingId
-        }"
-      >
+          deleting: conversation.id === deletingId,
+        }">
         <button
           type="button"
           class="entry"
           :class="{ active: conversation.id === activeId }"
-          @click="emit('select', conversation.id)"
-        >
+          @click="emit('select', conversation.id)">
           <span class="entry-title">{{ conversation.title }}</span>
           <span class="entry-time">{{ formatTime(conversation.updatedAt) }}</span>
         </button>
@@ -81,8 +68,7 @@ function formatTime(iso: string): string {
           :disabled="conversation.id === generatingId || conversation.id === deletingId"
           :title="conversation.id === generatingId ? '生成中不可删除' : '删除会话（不可恢复）'"
           :aria-label="`删除会话 ${conversation.title}`"
-          @click.stop="emit('remove', conversation.id)"
-        >
+          @click.stop="emit('remove', conversation.id)">
           <el-icon :size="13"><Delete /></el-icon>
         </button>
       </li>

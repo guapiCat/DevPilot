@@ -3,7 +3,7 @@ import {
   MAX_EDIT_CREATE_CONTENT_CHARS,
   MAX_EDIT_NEW_TEXT_CHARS,
   MAX_EDIT_OLD_TEXT_CHARS,
-  MAX_RELATIVE_PATH_LENGTH
+  MAX_RELATIVE_PATH_LENGTH,
 } from '@shared/constants/app'
 import { toToolError } from './errors'
 import { normalizeToolPath } from './path-args'
@@ -15,7 +15,7 @@ const schema = z.strictObject({
   operation: z.enum(['modify', 'create']),
   oldText: z.string().max(MAX_EDIT_OLD_TEXT_CHARS).optional(),
   newText: z.string().max(MAX_EDIT_NEW_TEXT_CHARS).optional(),
-  content: z.string().max(MAX_EDIT_CREATE_CONTENT_CHARS).optional()
+  content: z.string().max(MAX_EDIT_CREATE_CONTENT_CHARS).optional(),
 })
 
 export function createProposeEditTool(): ToolDefinition<typeof schema> {
@@ -52,7 +52,7 @@ export function createProposeEditTool(): ToolDefinition<typeof schema> {
         if (args.content !== undefined) {
           throw new ToolExecutionError(
             'INVALID_ARGUMENTS',
-            'operation=modify 时不要提供 content，请使用 oldText/newText'
+            'operation=modify 时不要提供 content，请使用 oldText/newText',
           )
         }
       } else {
@@ -62,7 +62,7 @@ export function createProposeEditTool(): ToolDefinition<typeof schema> {
         if (args.oldText !== undefined || args.newText !== undefined) {
           throw new ToolExecutionError(
             'INVALID_ARGUMENTS',
-            'operation=create 时不要提供 oldText/newText，请使用 content'
+            'operation=create 时不要提供 oldText/newText，请使用 content',
           )
         }
       }
@@ -85,7 +85,7 @@ export function createProposeEditTool(): ToolDefinition<typeof schema> {
           operation: args.operation,
           oldText: args.oldText,
           newText: args.newText,
-          content: args.content
+          content: args.content,
         })
       } catch (error) {
         throw toToolError(error)
@@ -95,7 +95,7 @@ export function createProposeEditTool(): ToolDefinition<typeof schema> {
         editSessionId: result.editSessionId,
         fileEditId: result.fileEditId,
         relativePath,
-        operation: args.operation
+        operation: args.operation,
       })
 
       const operationLabel = args.operation === 'modify' ? '修改现有文件' : '新建文件'
@@ -106,11 +106,11 @@ export function createProposeEditTool(): ToolDefinition<typeof schema> {
           `操作: ${operationLabel}`,
           '状态: 等待用户确认（尚未写入磁盘）',
           '用户会在左侧“变更与 Diff”面板查看差异并逐项应用或拒绝。',
-          '重要：不要声称文件已修改、保存或生效；只有用户确认后才会写入。'
+          '重要：不要声称文件已修改、保存或生效；只有用户确认后才会写入。',
         ].join('\n'),
         summary: `${relativePath} 修改建议待审核`,
-        truncated: false
+        truncated: false,
       }
-    }
+    },
   }
 }

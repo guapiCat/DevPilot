@@ -7,18 +7,21 @@ import type {
   ChatMessage,
   Conversation,
   RetryChatResult,
-  SendChatResult
+  SendChatResult,
 } from '@shared/types/chat'
 import type { ApplyFileEditResult, EditSession, FileEdit } from '@shared/types/edit'
-import type { GitDiffResult, GitStatus } from '@shared/types/git'
+import type {
+  GitBranchList,
+  GitCommitDetail,
+  GitCommitResult,
+  GitDiffResult,
+  GitLogResult,
+  GitRemoteStatus,
+  GitStatus,
+} from '@shared/types/git'
 import type { ErrorCode, IpcErrorPayload, IpcResult } from '@shared/types/ipc'
 import type { ModelProfileInput, TestModelProfileInput } from '@shared/types/model'
-import type {
-  FileContent,
-  FileTreeResult,
-  FileWriteResult,
-  RepositorySummary
-} from '@shared/types/repository'
+import type { FileContent, FileTreeResult, FileWriteResult, RepositorySummary } from '@shared/types/repository'
 
 export class DesktopApiError extends Error {
   readonly code: ErrorCode
@@ -44,7 +47,7 @@ export const desktopApi = {
     },
     async ping(message: string): Promise<PingResponse> {
       return unwrap(await window.devPilot.app.ping(message))
-    }
+    },
   },
   settings: {
     async getAiConfigStatus(): Promise<AiConfigStatus> {
@@ -64,7 +67,7 @@ export const desktopApi = {
     },
     async testModelProfile(input: TestModelProfileInput): Promise<AiConnectionTestResult> {
       return unwrap(await window.devPilot.settings.testModelProfile(input))
-    }
+    },
   },
   chat: {
     async listConversations(): Promise<Conversation[]> {
@@ -79,11 +82,7 @@ export const desktopApi = {
     async getMessages(conversationId: string): Promise<ChatMessage[]> {
       return unwrap(await window.devPilot.chat.getMessages(conversationId))
     },
-    async send(input: {
-      requestId: string
-      conversationId: string
-      content: string
-    }): Promise<SendChatResult> {
+    async send(input: { requestId: string; conversationId: string; content: string }): Promise<SendChatResult> {
       return unwrap(await window.devPilot.chat.send(input))
     },
     async retry(input: { requestId: string; conversationId: string }): Promise<RetryChatResult> {
@@ -94,7 +93,7 @@ export const desktopApi = {
     },
     onEvent(listener: (event: ChatEvent) => void): () => void {
       return window.devPilot.chat.onEvent(listener)
-    }
+    },
   },
   repository: {
     async select(): Promise<RepositorySummary | null> {
@@ -108,7 +107,7 @@ export const desktopApi = {
     },
     async remove(repositoryId: string): Promise<void> {
       unwrap(await window.devPilot.repository.remove(repositoryId))
-    }
+    },
   },
   file: {
     async read(repositoryId: string, relativePath: string): Promise<FileContent> {
@@ -118,12 +117,10 @@ export const desktopApi = {
       repositoryId: string,
       relativePath: string,
       content: string,
-      expectedHash: string
+      expectedHash: string,
     ): Promise<FileWriteResult> {
-      return unwrap(
-        await window.devPilot.file.write(repositoryId, relativePath, content, expectedHash)
-      )
-    }
+      return unwrap(await window.devPilot.file.write(repositoryId, relativePath, content, expectedHash))
+    },
   },
   git: {
     async getStatus(repositoryId: string): Promise<GitStatus> {
@@ -131,7 +128,43 @@ export const desktopApi = {
     },
     async getDiff(repositoryId: string, relativePath: string): Promise<GitDiffResult> {
       return unwrap(await window.devPilot.git.diff(repositoryId, relativePath))
-    }
+    },
+    async listBranches(repositoryId: string): Promise<GitBranchList> {
+      return unwrap(await window.devPilot.git.listBranches(repositoryId))
+    },
+    async stage(repositoryId: string, input: { all?: boolean; paths?: string[] }): Promise<void> {
+      unwrap(await window.devPilot.git.stage(repositoryId, input))
+    },
+    async unstage(repositoryId: string, input: { all?: boolean; paths?: string[] }): Promise<void> {
+      unwrap(await window.devPilot.git.unstage(repositoryId, input))
+    },
+    async commit(repositoryId: string, message: string): Promise<GitCommitResult> {
+      return unwrap(await window.devPilot.git.commit(repositoryId, message))
+    },
+    async createBranch(repositoryId: string, branchName: string, checkout: boolean): Promise<void> {
+      unwrap(await window.devPilot.git.createBranch(repositoryId, branchName, checkout))
+    },
+    async switchBranch(repositoryId: string, branchName: string): Promise<void> {
+      unwrap(await window.devPilot.git.switchBranch(repositoryId, branchName))
+    },
+    async log(repositoryId: string, options?: { limit?: number; skip?: number }): Promise<GitLogResult> {
+      return unwrap(await window.devPilot.git.log(repositoryId, options))
+    },
+    async commitDetail(repositoryId: string, sha: string): Promise<GitCommitDetail> {
+      return unwrap(await window.devPilot.git.commitDetail(repositoryId, sha))
+    },
+    async remoteStatus(repositoryId: string): Promise<GitRemoteStatus> {
+      return unwrap(await window.devPilot.git.remoteStatus(repositoryId))
+    },
+    async fetch(repositoryId: string): Promise<void> {
+      unwrap(await window.devPilot.git.fetch(repositoryId))
+    },
+    async pull(repositoryId: string): Promise<void> {
+      unwrap(await window.devPilot.git.pull(repositoryId))
+    },
+    async push(repositoryId: string): Promise<void> {
+      unwrap(await window.devPilot.git.push(repositoryId))
+    },
   },
   edit: {
     async listPending(conversationId: string): Promise<EditSession[]> {
@@ -142,6 +175,6 @@ export const desktopApi = {
     },
     async rejectFile(editSessionId: string, fileEditId: string): Promise<FileEdit> {
       return unwrap(await window.devPilot.edit.rejectFile(editSessionId, fileEditId))
-    }
-  }
+    },
+  },
 }

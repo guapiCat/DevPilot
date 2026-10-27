@@ -13,13 +13,10 @@ const SERVICE_CODE_MAP: Record<string, ToolErrorCode> = {
   GIT_NOT_AVAILABLE: 'GIT_NOT_AVAILABLE',
   GIT_TIMEOUT: 'GIT_TIMEOUT',
   GIT_COMMAND_FAILED: 'GIT_COMMAND_FAILED',
-  GIT_OUTPUT_TOO_LARGE: 'GIT_COMMAND_FAILED'
+  GIT_OUTPUT_TOO_LARGE: 'GIT_COMMAND_FAILED',
 }
 
-export function toToolError(
-  error: unknown,
-  fallback: ToolErrorCode = 'TOOL_FAILED'
-): ToolExecutionError {
+export function toToolError(error: unknown, fallback: ToolErrorCode = 'TOOL_FAILED'): ToolExecutionError {
   if (error instanceof ToolExecutionError) return error
   if (error instanceof ServiceError) {
     return new ToolExecutionError(SERVICE_CODE_MAP[error.code] ?? fallback, error.message)

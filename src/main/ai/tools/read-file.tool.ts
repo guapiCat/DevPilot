@@ -1,9 +1,5 @@
 import { z } from 'zod'
-import {
-  MAX_RELATIVE_PATH_LENGTH,
-  MAX_TOOL_OUTPUT_CHARS,
-  MAX_TOOL_READ_LINES
-} from '@shared/constants/app'
+import { MAX_RELATIVE_PATH_LENGTH, MAX_TOOL_OUTPUT_CHARS, MAX_TOOL_READ_LINES } from '@shared/constants/app'
 import type { FileContent } from '@shared/types/repository'
 import { fileService } from '@main/services/file.service'
 import { toToolError } from './errors'
@@ -19,7 +15,7 @@ interface FileReader {
 const schema = z.strictObject({
   path: z.string().min(1).max(MAX_RELATIVE_PATH_LENGTH),
   startLine: z.number().int().min(1).optional(),
-  endLine: z.number().int().min(1).optional()
+  endLine: z.number().int().min(1).optional(),
 })
 
 function splitLines(content: string): string[] {
@@ -45,10 +41,7 @@ export function createReadFileTool(files: FileReader = fileService): ToolDefinit
     async execute(args, context) {
       const relativePath = normalizeToolPath(args.path)
       if (!relativePath) {
-        throw new ToolExecutionError(
-          'INVALID_ARGUMENTS',
-          '请提供仓库内的相对文件路径，根目录不能作为文件读取'
-        )
+        throw new ToolExecutionError('INVALID_ARGUMENTS', '请提供仓库内的相对文件路径，根目录不能作为文件读取')
       }
 
       if (isSensitivePath(relativePath)) {
@@ -78,7 +71,7 @@ export function createReadFileTool(files: FileReader = fileService): ToolDefinit
         return {
           content: `# 文件: ${relativePath}（共 0 行）\n(文件为空)`,
           summary: `${relativePath} 共 0 行`,
-          truncated: false
+          truncated: false,
         }
       }
 
@@ -95,15 +88,15 @@ export function createReadFileTool(files: FileReader = fileService): ToolDefinit
         `# 文件: ${relativePath}（共 ${total} 行）`,
         `# 行范围: ${effectiveStart}-${effectiveEnd}${
           rangeTruncated ? `（已截断，单次最多 ${MAX_TOOL_READ_LINES} 行）` : ''
-        }`
+        }`,
       ].join('\n')
       const capped = capText(`${header}\n${body}`, MAX_TOOL_OUTPUT_CHARS)
 
       return {
         content: capped.text,
         summary: `${relativePath} 第 ${effectiveStart}-${effectiveEnd} 行 / 共 ${total} 行`,
-        truncated: capped.truncated || rangeTruncated
+        truncated: capped.truncated || rangeTruncated,
       }
-    }
+    },
   }
 }

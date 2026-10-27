@@ -1,10 +1,6 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/app'
-import {
-  modelProfileIdInputSchema,
-  modelProfileInputSchema,
-  testModelProfileInputSchema
-} from '@shared/schemas/model'
+import { modelProfileIdInputSchema, modelProfileInputSchema, testModelProfileInputSchema } from '@shared/schemas/model'
 import { testAdapterConnection } from '../ai/connection-test'
 import { chatService } from '../services/chat.service'
 import { getModelProfileService } from '../services/model-profile.service'

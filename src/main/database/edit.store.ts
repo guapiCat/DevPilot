@@ -1,11 +1,5 @@
 import type Database from 'better-sqlite3'
-import type {
-  EditSession,
-  EditSessionStatus,
-  FileEdit,
-  FileEditOperation,
-  FileEditStatus
-} from '@shared/types/edit'
+import type { EditSession, EditSessionStatus, FileEdit, FileEditOperation, FileEditStatus } from '@shared/types/edit'
 
 export interface EditSessionRow {
   id: string
@@ -61,7 +55,7 @@ function toFileEdit(row: FileEditRow): FileEdit {
     originalContent: row.original_content,
     proposedContent: row.proposed_content,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }
 }
 
@@ -72,16 +66,9 @@ export class EditStore {
     this.db
       .prepare<[string, string | null, string, string, string, string]>(
         `INSERT INTO edit_sessions (id, conversation_id, repository_id, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(
-        record.id,
-        record.conversationId,
-        record.repositoryId,
-        record.status,
-        record.createdAt,
-        record.updatedAt
-      )
+      .run(record.id, record.conversationId, record.repositoryId, record.status, record.createdAt, record.updatedAt)
   }
 
   findSession(id: string): EditSessionRow | undefined {
@@ -89,7 +76,7 @@ export class EditStore {
       .prepare<[string], EditSessionRow>(
         `SELECT id, conversation_id, repository_id, status, created_at, updated_at
          FROM edit_sessions
-         WHERE id = ?`
+         WHERE id = ?`,
       )
       .get(id)
   }
@@ -105,7 +92,7 @@ export class EditStore {
              SELECT 1 FROM file_edits f
              WHERE f.edit_session_id = s.id AND f.status IN ('proposed', 'stale')
            )
-         ORDER BY s.updated_at DESC, s.rowid DESC`
+         ORDER BY s.updated_at DESC, s.rowid DESC`,
       )
       .all(conversationId)
 
@@ -118,7 +105,7 @@ export class EditStore {
       updatedAt: session.updated_at,
       files: this.listFileEdits(session.id)
         .filter((file) => file.status === 'proposed' || file.status === 'stale')
-        .map(toFileEdit)
+        .map(toFileEdit),
     }))
   }
 
@@ -129,7 +116,7 @@ export class EditStore {
                 proposed_content, original_hash, status, created_at, updated_at
          FROM file_edits
          WHERE edit_session_id = ?
-         ORDER BY created_at, rowid`
+         ORDER BY created_at, rowid`,
       )
       .all(editSessionId)
   }
@@ -140,7 +127,7 @@ export class EditStore {
         `SELECT id, edit_session_id, relative_path, operation, original_content,
                 proposed_content, original_hash, status, created_at, updated_at
          FROM file_edits
-         WHERE id = ?`
+         WHERE id = ?`,
       )
       .get(id)
   }
@@ -153,16 +140,14 @@ export class EditStore {
          FROM file_edits
          WHERE edit_session_id = ? AND relative_path = ? COLLATE NOCASE
            AND status IN ('proposed', 'stale', 'applied')
-         LIMIT 1`
+         LIMIT 1`,
       )
       .get(editSessionId, relativePath)
   }
 
   countFileEdits(editSessionId: string): number {
     const row = this.db
-      .prepare<[string], { count: number }>(
-        'SELECT COUNT(*) AS count FROM file_edits WHERE edit_session_id = ?'
-      )
+      .prepare<[string], { count: number }>('SELECT COUNT(*) AS count FROM file_edits WHERE edit_session_id = ?')
       .get(editSessionId)
 
     return row?.count ?? 0
@@ -170,13 +155,11 @@ export class EditStore {
 
   insertFileEdit(record: FileEditRecord): void {
     this.db
-      .prepare<
-        [string, string, string, string, string | null, string, string, string, string, string]
-      >(
+      .prepare<[string, string, string, string, string | null, string, string, string, string, string]>(
         `INSERT INTO file_edits (
            id, edit_session_id, relative_path, operation, original_content,
            proposed_content, original_hash, status, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         record.id,
@@ -188,29 +171,23 @@ export class EditStore {
         record.originalHash,
         record.status,
         record.createdAt,
-        record.updatedAt
+        record.updatedAt,
       )
   }
 
   updateFileEditStatus(id: string, status: FileEditStatus, updatedAt: string): void {
     this.db
-      .prepare<[string, string, string]>(
-        'UPDATE file_edits SET status = ?, updated_at = ? WHERE id = ?'
-      )
+      .prepare<[string, string, string]>('UPDATE file_edits SET status = ?, updated_at = ? WHERE id = ?')
       .run(status, updatedAt, id)
   }
 
   updateSessionStatus(id: string, status: EditSessionStatus, updatedAt: string): void {
     this.db
-      .prepare<[string, string, string]>(
-        'UPDATE edit_sessions SET status = ?, updated_at = ? WHERE id = ?'
-      )
+      .prepare<[string, string, string]>('UPDATE edit_sessions SET status = ?, updated_at = ? WHERE id = ?')
       .run(status, updatedAt, id)
   }
 
   touchSession(id: string, updatedAt: string): void {
-    this.db
-      .prepare<[string, string]>('UPDATE edit_sessions SET updated_at = ? WHERE id = ?')
-      .run(updatedAt, id)
+    this.db.prepare<[string, string]>('UPDATE edit_sessions SET updated_at = ? WHERE id = ?').run(updatedAt, id)
   }
 }

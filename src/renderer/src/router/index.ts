@@ -13,25 +13,31 @@ export const router = createRouter({
           path: 'chat',
           name: 'chat',
           component: () => import('@renderer/views/ChatView.vue'),
-          meta: { title: '研发对话' }
+          meta: { title: '研发对话' },
         },
         {
           path: 'workspace',
           name: 'workspace',
           component: () => import('@renderer/views/WorkspaceView.vue'),
-          meta: { title: '研发工作区' }
+          meta: { title: '研发工作区' },
+        },
+        {
+          path: 'source-control',
+          name: 'source-control',
+          component: () => import('@renderer/views/SourceControlView.vue'),
+          meta: { title: '源代码管理' },
         },
         {
           path: 'settings',
           name: 'settings',
           component: () => import('@renderer/views/SettingsView.vue'),
-          meta: { title: '设置' }
-        }
-      ]
+          meta: { title: '设置' },
+        },
+      ],
     },
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/chat'
-    }
-  ]
+      redirect: '/chat',
+    },
+  ],
 })

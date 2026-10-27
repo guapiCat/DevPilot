@@ -12,7 +12,7 @@ function makeFile(id: string, relativePath: string): FileEdit {
     originalContent: 'before',
     proposedContent: 'after',
     createdAt: '2026-10-23T00:00:00.000Z',
-    updatedAt: '2026-10-23T00:00:00.000Z'
+    updatedAt: '2026-10-23T00:00:00.000Z',
   }
 }
 
@@ -24,13 +24,13 @@ function makeSession(id: string, files: FileEdit[]): EditSession {
     status: 'active',
     createdAt: '2026-10-23T00:00:00.000Z',
     updatedAt: '2026-10-23T00:00:00.000Z',
-    files: files.map((file) => ({ ...file, editSessionId: id }))
+    files: files.map((file) => ({ ...file, editSessionId: id })),
   }
 }
 
 const sessions = [
   makeSession('session-a', [makeFile('file-1', 'src/a.ts'), makeFile('file-2', 'src/b.ts')]),
-  makeSession('session-b', [makeFile('file-3', 'src/c.ts')])
+  makeSession('session-b', [makeFile('file-3', 'src/c.ts')]),
 ]
 
 const entries = flattenEditFiles(sessions)
@@ -40,13 +40,9 @@ describe('审核导航工具', () => {
     expect(entries.map((entry) => entry.key)).toEqual([
       editFileKey('session-a', 'file-1'),
       editFileKey('session-a', 'file-2'),
-      editFileKey('session-b', 'file-3')
+      editFileKey('session-b', 'file-3'),
     ])
-    expect(entries.map((entry) => entry.file.relativePath)).toEqual([
-      'src/a.ts',
-      'src/b.ts',
-      'src/c.ts'
-    ])
+    expect(entries.map((entry) => entry.file.relativePath)).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts'])
     expect(entries[0].sessionId).toBe('session-a')
   })
 

@@ -22,7 +22,7 @@ function toRecord(row: RepositoryRow): RepositoryRecord {
     name: row.name,
     path: row.path,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }
 }
 
@@ -32,7 +32,7 @@ export class RepositoryStore {
   list(): RepositoryRecord[] {
     const rows = this.db
       .prepare<[], RepositoryRow>(
-        'SELECT id, name, path, created_at, updated_at FROM repositories ORDER BY updated_at DESC'
+        'SELECT id, name, path, created_at, updated_at FROM repositories ORDER BY updated_at DESC',
       )
       .all()
 
@@ -44,7 +44,7 @@ export class RepositoryStore {
       .prepare<[string], RepositoryRow>(
         `SELECT id, name, path, created_at, updated_at
          FROM repositories
-         WHERE path = ? COLLATE NOCASE`
+         WHERE path = ? COLLATE NOCASE`,
       )
       .get(path)
 
@@ -55,15 +55,13 @@ export class RepositoryStore {
     this.db
       .prepare<[string, string, string, string, string]>(
         `INSERT INTO repositories (id, name, path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?)`,
       )
       .run(record.id, record.name, record.path, record.createdAt, record.updatedAt)
   }
 
   touch(id: string, updatedAt: string): void {
-    this.db
-      .prepare<[string, string]>('UPDATE repositories SET updated_at = ? WHERE id = ?')
-      .run(updatedAt, id)
+    this.db.prepare<[string, string]>('UPDATE repositories SET updated_at = ? WHERE id = ?').run(updatedAt, id)
   }
 
   delete(id: string): void {

@@ -31,15 +31,8 @@ async function loadMonaco(): Promise<MonacoApi> {
 watch(monacoTheme, (value) => {
   monacoApi?.editor.setTheme(value)
 })
-const {
-  openTabs,
-  activeFilePath,
-  fileContents,
-  fileErrors,
-  fileDirty,
-  fileSavingPath,
-  fileLoadingPath
-} = storeToRefs(workspace)
+const { openTabs, activeFilePath, fileContents, fileErrors, fileDirty, fileSavingPath, fileLoadingPath } =
+  storeToRefs(workspace)
 
 const editorHost = ref<HTMLDivElement | null>(null)
 let editor: Monaco.editor.IStandaloneCodeEditor | null = null
@@ -55,17 +48,11 @@ const activeError = computed(() => {
   return path ? (fileErrors.value[path] ?? null) : null
 })
 
-const isLoading = computed(
-  () => Boolean(activeFilePath.value) && fileLoadingPath.value === activeFilePath.value
-)
+const isLoading = computed(() => Boolean(activeFilePath.value) && fileLoadingPath.value === activeFilePath.value)
 
-const isDirty = computed(
-  () => Boolean(activeFilePath.value) && Boolean(fileDirty.value[activeFilePath.value!])
-)
+const isDirty = computed(() => Boolean(activeFilePath.value) && Boolean(fileDirty.value[activeFilePath.value!]))
 
-const isSaving = computed(
-  () => Boolean(activeFilePath.value) && fileSavingPath.value === activeFilePath.value
-)
+const isSaving = computed(() => Boolean(activeFilePath.value) && fileSavingPath.value === activeFilePath.value)
 
 const canSave = computed(() => isDirty.value && !isSaving.value)
 
@@ -106,8 +93,8 @@ function ensureEditor(api: MonacoApi): Monaco.editor.IStandaloneCodeEditor | nul
       scrollbar: {
         verticalScrollbarSize: 10,
         horizontalScrollbarSize: 10,
-        useShadows: false
-      }
+        useShadows: false,
+      },
     })
 
     editor.onDidChangeModelContent(() => syncActiveDirty())
@@ -137,9 +124,7 @@ async function syncActiveModel(): Promise<void> {
   let model = models.get(path)
   if (!model || model.isDisposed()) {
     const uri = toModelUri(api, path)
-    model =
-      api.editor.getModel(uri) ??
-      api.editor.createModel(content.content, getMonacoLanguage(path), uri)
+    model = api.editor.getModel(uri) ?? api.editor.createModel(content.content, getMonacoLanguage(path), uri)
     models.set(path, model)
   }
 
@@ -182,16 +167,12 @@ async function reloadFile(relativePath: string): Promise<void> {
 
 async function handleFileConflict(relativePath: string): Promise<void> {
   try {
-    await ElMessageBox.confirm(
-      '该文件已在磁盘上被外部修改。重新加载将丢弃当前未保存的修改。',
-      '文件已被外部修改',
-      {
-        confirmButtonText: '重新加载',
-        cancelButtonText: '保留我的修改',
-        type: 'warning',
-        distinguishCancelAndClose: false
-      }
-    )
+    await ElMessageBox.confirm('该文件已在磁盘上被外部修改。重新加载将丢弃当前未保存的修改。', '文件已被外部修改', {
+      confirmButtonText: '重新加载',
+      cancelButtonText: '保留我的修改',
+      type: 'warning',
+      distinguishCancelAndClose: false,
+    })
   } catch {
     return
   }
@@ -245,8 +226,8 @@ async function requestCloseTab(relativePath: string): Promise<void> {
         {
           confirmButtonText: '关闭',
           cancelButtonText: '取消',
-          type: 'warning'
-        }
+          type: 'warning',
+        },
       )
     } catch {
       return
@@ -261,8 +242,7 @@ function handleGlobalKeydown(event: KeyboardEvent): void {
 
   const target = event.target instanceof HTMLElement ? event.target : null
   const isEditable = Boolean(
-    target?.closest('input, textarea, [contenteditable="true"]') &&
-    !target.closest('.monaco-editor')
+    target?.closest('input, textarea, [contenteditable="true"]') && !target.closest('.monaco-editor'),
   )
   if (isEditable) return
 
@@ -277,7 +257,7 @@ watch(
       void syncActiveModel()
     })
   },
-  { flush: 'post' }
+  { flush: 'post' },
 )
 
 watch(activeFilePath, (path) => {
@@ -292,7 +272,7 @@ watch(
   (tabs) => {
     disposeModels(tabs)
   },
-  { deep: true }
+  { deep: true },
 )
 
 onMounted(() => {
@@ -322,8 +302,7 @@ onBeforeUnmount(() => {
         type="button"
         class="tab"
         :class="{ active: tab === activeFilePath }"
-        @click="workspace.openFile(tab)"
-      >
+        @click="workspace.openFile(tab)">
         <el-icon :size="14"><Document /></el-icon>
         <span class="tab-path">{{ tab }}</span>
         <span v-if="fileDirty[tab]" class="tab-dirty" aria-label="未保存"></span>
@@ -333,8 +312,7 @@ onBeforeUnmount(() => {
           tabindex="0"
           :aria-label="`关闭 ${tab}`"
           @click.stop="requestCloseTab(tab)"
-          @keydown.enter.stop="requestCloseTab(tab)"
-        >
+          @keydown.enter.stop="requestCloseTab(tab)">
           <el-icon :size="12"><Close /></el-icon>
         </span>
       </button>
@@ -345,8 +323,7 @@ onBeforeUnmount(() => {
         v-if="!activeFilePath"
         :icon="Document"
         title="没有打开的文件"
-        description="从左侧文件树选择文件即可查看并编辑代码，Ctrl+S 保存。"
-      />
+        description="从左侧文件树选择文件即可查看并编辑代码，Ctrl+S 保存。" />
 
       <div v-else class="file-view">
         <div class="file-meta">
@@ -354,9 +331,7 @@ onBeforeUnmount(() => {
           <div class="file-meta-actions">
             <span class="file-info">
               <template v-if="activeContent">
-                {{ formatSize(activeContent.size) }} · UTF-8{{
-                  activeContent.hadBom ? ' · BOM' : ''
-                }}
+                {{ formatSize(activeContent.size) }} · UTF-8{{ activeContent.hadBom ? ' · BOM' : '' }}
               </template>
               <template v-else-if="!activeError">加载中…</template>
               <template v-else>读取失败</template>
@@ -370,8 +345,7 @@ onBeforeUnmount(() => {
               :disabled="!canSave"
               :loading="isSaving"
               title="保存到磁盘（Ctrl+S）"
-              @click="saveActiveFile"
-            >
+              @click="saveActiveFile">
               保存
             </el-button>
           </div>
